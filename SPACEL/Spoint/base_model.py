@@ -700,7 +700,7 @@ class SpointModel():
             print('History is empty, training model first')
             
 
-    def deconv_spatial(self,st_data=None,model_path=None,use_best_model=True,add_obs=True,add_uns=True):
+    def deconv_spatial(self,st_data=None,min_prop=0.01,model_path=None,use_best_model=True,add_obs=True,add_uns=True):
         if st_data is None:
             st_data = self.st_data
         # st_data_norm = data_utils.normalize_mtx(st_data,target_sum=1e4)
@@ -711,6 +711,7 @@ class SpointModel():
             self.model.load_weights(self.best_path)
         latent = self.model.encoder(st_data, training=False)
         pre = self.model.pred(latent, training=False).numpy()
+        pre[pre < min_prop] = 0
         pre = pd.DataFrame(pre,columns=self.clusters,index=self.st_ad.obs_names)
         self.st_ad.obs[pre.columns] = pre.values
         self.st_ad.uns['celltypes'] = list(pre.columns)

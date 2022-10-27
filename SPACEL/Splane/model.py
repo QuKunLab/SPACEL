@@ -179,6 +179,7 @@ def init_model(
     k:int=2,
     train_prop:float=0.5,
     n_neighbors=6,
+    min_prop=0.01,
     lr:float=3e-3,
     latent_dim:int=16,
     hidden_dims:int=64,
@@ -193,7 +194,7 @@ def init_model(
     for expr_ad in expr_ad_list:
         if 'spatial_connectivities' not in expr_ad.obsp.keys():
             sq.gr.spatial_neighbors(expr_ad,coord_type='grid',n_neighs=n_neighbors)
-    celltype_ad_list = generate_celltype_ad_list(expr_ad_list)
+    celltype_ad_list = generate_celltype_ad_list(expr_ad_list,min_prop)
     celltype_weights,morans_mean = cal_celltype_weight(celltype_ad_list)
     X,A,nb_mask,slice_class_onehot = get_GNN_inputs(celltype_ad_list)
     X_filtered, graph, G, support = get_GNN_kernel(X,A,k=k)

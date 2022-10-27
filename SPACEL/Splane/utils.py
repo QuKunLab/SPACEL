@@ -69,14 +69,14 @@ def cal_celltype_weight(ad_list):
     celltype_weights = morans_mean/morans_mean.sum()
     return celltype_weights, morans_mean
 
-def generate_celltype_ad_list(expr_ad_list):
+def generate_celltype_ad_list(expr_ad_list,min_prop):
     celltype_ad_list = []
     for expr_ad in expr_ad_list:
         celltype_ad = anndata.AnnData(expr_ad.obs[[c for c in expr_ad.uns['celltypes']]])
         celltype_ad.obs = expr_ad.obs
         celltype_ad.obsm =expr_ad.obsm
         celltype_ad.obsp = expr_ad.obsp
-        celltype_ad = fill_low_prop(celltype_ad)
+        celltype_ad = fill_low_prop(celltype_ad,min_prop)
         celltype_ad_list.append(celltype_ad)
     return celltype_ad_list
 
