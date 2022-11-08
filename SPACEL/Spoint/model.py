@@ -24,6 +24,10 @@ def init_model(
     deg_method:str='wilcoxon',
     n_top_markers:int=200,
     n_top_hvg:int=None,
+    log2fc_min=0.5, 
+    pval_cutoff=0.01, 
+    pct_diff=None, 
+    pct_min=0.1,
     st_batch_key=None,
     sm_size:int=500000,
     downsample=False,
@@ -49,7 +53,21 @@ def init_model(
 
     sc_ad = data_utils.normalize_adata(sc_ad,target_sum=1e4)
     st_ad = data_utils.normalize_adata(st_ad,target_sum=1e4)
-    sc_ad, st_ad = data_utils.filter_model_genes(sc_ad,st_ad,celltype_key=celltype_key,deg_method=deg_method,n_top_markers=n_top_markers)
+    sc_ad, st_ad = data_utils.filter_model_genes(
+        sc_ad,
+        st_ad,
+        celltype_key=celltype_key,
+        deg_method=deg_method,
+        n_top_markers=n_top_markers,
+        n_top_hvg=n_top_hvg,
+        used_genes=used_genes,
+        sc_genes=sc_genes,
+        st_genes=st_genes,
+        log2fc_min=log2fc_min, 
+        pval_cutoff=pval_cutoff, 
+        pct_diff=pct_diff, 
+        pct_min=pct_min
+    )
  
     sm_ad = data_utils.generate_sm_adata(sc_ad,num_sample=sm_size,celltype_key=celltype_key,n_threads=n_threads)
     data_utils.downsample_sm_spot_counts(sm_ad,st_ad,n_threads=n_threads)
