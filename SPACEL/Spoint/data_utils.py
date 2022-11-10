@@ -92,13 +92,14 @@ def filter_model_genes(
     sc_ad = sc_ad[:,overlaped_genes].copy()
     st_ad = st_ad[:,overlaped_genes].copy()
     if used_genes is None:
-        if sc_genes is None:
-            sc_genes = find_sc_markers(sc_ad, celltype_key, layer, deg_method, log2fc_min, pval_cutoff, n_top_markers, pct_diff, pct_min)
         if st_genes is None:
             if n_top_hvg is None:
                 st_genes = st_ad.var_names
             else:
                 st_genes = find_st_hvg(st_ad, n_top_hvg)
+        if sc_genes is None:
+            sc_ad = sc_ad[:, st_genes].copy()
+            sc_genes = find_sc_markers(sc_ad, celltype_key, layer, deg_method, log2fc_min, pval_cutoff, n_top_markers, pct_diff, pct_min)
         used_genes = np.intersect1d(sc_genes,st_genes)
     sc_ad = sc_ad[:,used_genes].copy()
     st_ad = st_ad[:,used_genes].copy()
