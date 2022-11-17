@@ -177,6 +177,7 @@ def init_model(
     expr_ad_list:list,
     n_clusters:int,
     k:int=2,
+    use_weight=True,
     train_prop:float=0.5,
     n_neighbors=6,
     min_prop=0.01,
@@ -196,6 +197,8 @@ def init_model(
             sq.gr.spatial_neighbors(expr_ad,coord_type='grid',n_neighs=n_neighbors)
     celltype_ad_list = generate_celltype_ad_list(expr_ad_list,min_prop)
     celltype_weights,morans_mean = cal_celltype_weight(celltype_ad_list)
+    if not use_weight:
+        celltype_weights = np.ones(len(celltype_weights))/len(celltype_weights)
     X,A,nb_mask,slice_class_onehot = get_GNN_inputs(celltype_ad_list)
     X_filtered, graph, G, support = get_GNN_kernel(X,A,k=k)
     train_mask,test_mask = split_train_test_data(X,train_prop=0.5)
