@@ -101,6 +101,7 @@ class SplaneModel():
         db_convergence=0,
         early_stop_epochs=10,
         d_l=0.2,
+        simi_l=None,
         g_step = 1,
         d_step = 1,
         plot_step=5,
