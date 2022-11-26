@@ -87,29 +87,30 @@ def split_train_test_data(X,train_prop):
     return train_mask, test_mask
 
 class GraphConvolutionModel(tf.keras.models.Model):
-    def __init__(self,feature_dims,G,support,latent_dims=8,hidden_dims=64):
+    def __init__(self,feature_dims,G,support,latent_dims=8,hidden_dims=64,dropout=0.8):
         super(GraphConvolutionModel, self).__init__()
         self.G = G
         self.support = support
         self.latent_dims=latent_dims
         self.hidden_dims=hidden_dims
         self.feature_dims = feature_dims
+        self.dropout = dropout
         self.encoder=self.build_encoder()
         self.decoder = self.build_decoder()
 
     def build_encoder(self):
         X_in = Input(shape=(self.feature_dims,))
-        H = Dropout(0.8)(X_in)
+        H = Dropout(self.dropout)(X_in)
         H = GraphConvolution(self.hidden_dims, self.support, activation=tf.keras.layers.LeakyReLU(), kernel_initializer=tf.keras.initializers.HeNormal(), kernel_regularizer=l1_l2(), use_bias=False)([H]+self.G)
-        H = Dropout(0.8)(H)
+        H = Dropout(self.dropout)(H)
         Y = GraphConvolution(self.latent_dims, self.support, activation=l2_activation, kernel_initializer=tf.keras.initializers.GlorotUniform(), use_bias=False)([H]+self.G)
         return Model(inputs=[X_in]+self.G, outputs=Y)
 
     def build_decoder(self):
         X_in = Input(shape=(self.latent_dims,))
-        H = Dropout(0.8)(X_in)
+        H = Dropout(self.dropout)(X_in)
         H = GraphConvolution(self.hidden_dims, self.support, activation=tf.keras.layers.LeakyReLU(), kernel_initializer=tf.keras.initializers.HeNormal(), kernel_regularizer=l1_l2(), use_bias=False)([H]+self.G)
-        H = Dropout(0.8)(H)
+        H = Dropout(self.dropout)(H)
         Y = GraphConvolution(self.feature_dims, self.support, activation=None, kernel_initializer=tf.keras.initializers.GlorotUniform(), use_bias=False)([H]+self.G)
         return Model(inputs=[X_in]+self.G, outputs=Y)
 

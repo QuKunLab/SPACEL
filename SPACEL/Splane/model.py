@@ -28,10 +28,11 @@ class SplaneModel():
         morans_mean,
         lr,
         latent_dim,
-        hidden_dims
+        hidden_dims,
+        gnn_dropout
     ):
         self.expr_ad_list = expr_ad_list
-        self.model_g = GraphConvolutionModel(X.shape[1],G,support,latent_dims=latent_dim,hidden_dims=hidden_dims)
+        self.model_g = GraphConvolutionModel(X.shape[1],G,support,latent_dims=latent_dim,hidden_dims=hidden_dims,dropout=gnn_dropout)
         self.model_d = DiscriminationModel(slice_class_onehot,latent_dims=latent_dim,hidden_dims=hidden_dims)
         self.graph = graph
         self.slice_class_onehot = slice_class_onehot
@@ -185,6 +186,7 @@ def init_model(
     lr:float=3e-3,
     latent_dim:int=16,
     hidden_dims:int=64,
+    gnn_dropout:float=0.8,
     seed=42
 )->SplaneModel:
     
@@ -218,5 +220,6 @@ def init_model(
         morans_mean,
         lr,
         latent_dim,
-        hidden_dims
+        hidden_dims,
+        gnn_dropout
     )
