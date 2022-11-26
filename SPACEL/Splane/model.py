@@ -187,6 +187,7 @@ def init_model(
     latent_dim:int=16,
     hidden_dims:int=64,
     gnn_dropout:float=0.8,
+    simi_neighbor=1,
     seed=42
 )->SplaneModel:
     
@@ -204,6 +205,13 @@ def init_model(
         celltype_weights = np.ones(len(celltype_weights))/len(celltype_weights)
     X,A,nb_mask,slice_class_onehot = get_GNN_inputs(celltype_ad_list)
     X_filtered, graph, G, support = get_GNN_kernel(X,A,k=k)
+    if simi_neighbor == 1:
+        nb_mask = nb_mask
+    elif simi_neighbor == None:
+        nb_mask = np.array(np.where(tf.sparse.to_dense(graph[-1])!=0))
+        nb_mask = nb_mask[:,nb_mask[0] != nb_mask[1]]
+    else:
+        raise ValueError('simi_neighbor must be 1 or None.')
     train_mask,test_mask = split_train_test_data(X,train_prop=0.5)
     return SplaneModel(
         expr_ad_list,
