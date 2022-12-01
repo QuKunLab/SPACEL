@@ -9,6 +9,8 @@ rpy2==3.3.6
 squidpy==1.2.0
 tensorflow-determinism
 tensorflow==2.3.1
+h5py==2.10.0
+torch==1.12.0
 scipy==1.5.0
 gpytorch==1.8.1
 torchmetrics==0.6.0
