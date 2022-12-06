@@ -146,7 +146,7 @@ def align(
     
     # centering X, Y coordinate
     for i in range(len(ad_list)):
-        raw_loc = np.asarray(ad_list[i].obsm[raw_loc_key])
+        raw_loc = np.asarray(ad_list[i].obsm[raw_loc_key], dtype=np.float32)
         raw_loc[:,:2] = raw_loc[:,:2] - np.median(raw_loc[:,:2],axis=0)
         ad_list[i].obsm['spatial_pair'] = raw_loc
     
@@ -165,7 +165,7 @@ def align(
         r = align_pairwise(param, n_neighbors=n_neighbors, knn_exclude_cutoff=knn_exclude_cutoff,p=p,a=a,bound_alpha=bound_alpha, n_threads=n_threads,seed=seed)
         res.append(r)
     
-    warp_info=np.array(res)
+    warp_info=np.array(res,dtype=np.float32)
     np.save(os.path.join(output_path,'warp_info.npy'),warp_info)
     
     warp_info = warp_info[:,:6]
