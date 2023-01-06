@@ -23,7 +23,7 @@ conda env create -f environment.yml
 ```
 or
 ```
-conda create -n SPACEL -c conda-forge -c default cudnn=7.6 cudatoolkit=10.1 python==3.8 r-base r-fitdistrplus
+conda create -n SPACEL -c conda-forge -c default cudnn=7.6 cudatoolkit=10.1 python=3.8 r-base r-fitdistrplus
 ```
 you can choose correct `tensorflow`, `cudnn` and `cudatoolkit` version dependent on your graphic driver version. If you don't need GPU acceleration, you can just skip the installation for `cudnn` and `cudatoolkit`.
 * Test if [TensorFlow](https://www.tensorflow.org/) for GPU available:
