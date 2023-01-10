@@ -21,10 +21,10 @@ setup(
     install_requires=[
         "pip",
         "rpy2>=3.3.6",
-        "squidpy>=1.2.0"
-        "scvi-tools<=0.14.6"
+        "squidpy>=1.2.0",
+        "scvi-tools<=0.14.6",
         "scipy>=1.5.0",
-        "scikit-learn>=1.0.2"
+        "scikit-learn>=1.0.2",
         "matplotlib>=3.5.1",
         "seaborn>=0.11.2",
         "scanpy>=1.8.2",
