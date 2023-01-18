@@ -109,6 +109,24 @@ class SplaneModel():
         save_path = 'Splane_models',
         prefix=None
     ):
+        """Training Splane model.
+        
+        Obtain latent feature from scVI then feed in Spoint model for training until loss convengence.
+
+        Args:
+            max_steps: The max step of training. The training process will be stop when achive max step.
+            convergence: The total loss threshold for early stop.
+            db_convergence: The DBS threshold for early stop.
+            early_stop_epochs: The max epochs of loss difference less than convergence.
+            d_l: The weight of discriminator loss.
+            simi_l: The weight of similarity loss.
+            plot_step: The interval steps of training.
+            save_path: A string representing the path directory where the model is saved.
+            prefix: A string added to the prefix of file name of saved model.
+        
+        Returns:
+            None
+        """
         best_loss = np.inf
         best_db_loss = np.inf
         best_simi_loss = np.inf
@@ -153,6 +171,17 @@ class SplaneModel():
                     break
                     
     def identify_spatial_domain(self,colors=None,key=None):
+        """Identification of spatial domain.
+        
+        Using well-trained Splane model to predict the spatial domain of spots/cells in spatial transcriptomic data.
+        
+        Args:
+            colors: A string sequence representing the color of each spatial domain.
+            key: A string written to column of obs in AnnData object of spatial transcriptomic data.
+        
+        Returns:
+            None
+        """
         if colors is None:
             if self.n_clusters > 10:
                 colors = [matplotlib.colors.to_hex(c) for c in sns.color_palette('tab20',n_colors=self.n_clusters)]
@@ -190,6 +219,26 @@ def init_model(
     simi_neighbor=1,
     seed=42
 )->SplaneModel:
+    """Initialize Splane model.
+    
+    Build the model then set the data and paratemters. 
+    
+    Args:
+        expr_ad_list: A list of AnnData object of spatial transcriptomic data as the model input.
+        n_clusters: The number of cluster of the model ouput. 
+        k: The order of neighbors of a spot for graph construction.
+        use_weight: If True, the cell type proportion of Moran was used as the weight of the loss.
+        train_prop: The proportion of training set.
+        n_neighbors: The number of neighbors for graph construction.
+        lr: Learning rate of training.
+        latent_dim: The dimension of latent features. It equal to the number of nodes of bottleneck layer.
+        hidden_dims: The number of nodes of hidden layers.
+        gnn_dropout: The dropout rate of GNN model.
+        simi_neighbor: The order of neighbors used for similarity loss. If is None, It equal to the order used for constructed graph.
+        seed: Random number seed.
+    Returns:
+        A DataFrame contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
+    """
     
     print('Setting global seed:', seed)
     random.seed(seed)
