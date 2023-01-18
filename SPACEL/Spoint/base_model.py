@@ -15,52 +15,26 @@ import itertools
 from functools import partial
 
 def guassian_kernel(source, target):
-    '''
-    将源域数据和目标域数据转化为核矩阵，即上文中的K
-    Params:
-     source: (b1,n)的X分布样本数组
-     target:（b2，n)的Y分布样本数组
-    Return:
-      kernel_val: 对应的核矩阵
-    '''
-    # 堆叠两组样本，上面是X分布样本，下面是Y分布样本，得到（b1+b2,n）组总样本
     n_samples = int(source.shape[0])+int(target.shape[0])
     total = np.concatenate((source, target), axis=0)
-    # 对总样本变换格式为（1,b1+b2,n）,然后将后两维度数据复制到新拓展的维度上（b1+b2，b1+b2,n），相当于按行复制
     total0 = np.expand_dims(total,axis=0)
     total0= np.broadcast_to(total0,[int(total.shape[0]), int(total.shape[0]), int(total.shape[1])])
-    # 对总样本变换格式为（b1+b2,1,n）,然后将后两维度数据复制到新拓展的维度上（b1+b2，b1+b2,n），相当于按复制
     total1 = np.expand_dims(total,axis=1)
     total1=np.broadcast_to(total1,[int(total.shape[0]), int(total.shape[0]), int(total.shape[1])])
-    # total1 - total2 得到的矩阵中坐标（i,j, :）代表total中第i行数据和第j行数据之间的差
-    # sum函数，对第三维进行求和，即平方后再求和，获得高斯核指数部分的分子，是L2范数的平方
     L2_distance_square = np.cumsum(np.square(total0-total1),axis=2)
-    #调整高斯核函数的sigma值
     bandwidth = np.sum(L2_distance_square) / (n_samples**2-n_samples)
-    #高斯核函数的数学表达式
     kernel_val = np.exp(-L2_distance_square / bandwidth)
-    #得到最终的核矩阵
     return kernel_val
 
 def MMD(source, target):
-    '''
-    计算源域数据和目标域数据的MMD距离
-    Params:
-     source: 源域数据，行表示样本数目，列表示样本数据维度
-     target: 目标域数据 同source
-    Return:
-     loss: MMD loss
-    '''
-    batch_size = int(source.shape[0])#一般默认为X和Y传入的样本的总批次样本数是一致的
+    batch_size = int(source.shape[0])
     kernels = guassian_kernel(source, target)
-    #将核矩阵分成4部分
     loss = 0
     for i in range(batch_size):
         s1, s2 = i, (i + 1) % batch_size
         t1, t2 = s1 + batch_size, s2 + batch_size
         loss += kernels[s1, s2] + kernels[t1, t2]
         loss -= kernels[s1, t2] + kernels[s2, t1]
-    # 这里计算出的n_loss是每个维度上的MMD距离，一般还会做均值化处理
     n_loss= loss / float(batch_size)
     return np.mean(n_loss)
 
@@ -604,7 +578,33 @@ class SpointModel():
         scvi_early_stopping=True,
         scvi_batch_size=4096,
     ):
+        """Training Spoint model.
         
+        Obtain latent feature from scVI then feed in Spoint model for training until loss convengence.
+
+        Args:
+            max_steps: The max step of training. The training process will be stop when achive max step.
+            save_mode: A string determinates how the model is saved. It must be one of 'best' and 'all'.
+            save_path: A string representing the path directory where the model is saved.
+            prefix: A string added to the prefix of file name of saved model.
+            convergence: The threshold of early stop.
+            early_stop: If True, turn on early stop.
+            early_stop_max: The max steps of loss difference less than convergence.
+            sm_lr: Learning rate for simulated data.
+            st_lr: Learning rate for spatial transcriptomic data.
+            disc_lr: Learning rate of discriminator.
+            batch_size: Batch size of the data be feeded in model once.
+            rec_w: The weight of reconstruction loss.
+            infer_w: The weig ht of inference loss.
+            d_w: The weight of discrimination loss.
+            m_w=1000: The weight of MMD loss.
+            scvi_max_epochs: The max epoch of scVI.
+            scvi_batch_size: The batch size of scVI.
+        
+        Returns:
+            None
+        """
+
         self.get_scvi_latent(
             n_layers=scvi_layers,
             n_latent=scvi_latent,
@@ -701,6 +701,21 @@ class SpointModel():
             
 
     def deconv_spatial(self,st_data=None,min_prop=0.01,model_path=None,use_best_model=True,add_obs=True,add_uns=True):
+        """Deconvolute spatial transcriptomic data.
+        
+        Using well-trained Spoint model to predict the cell type porportion of spots in spatial transcriptomic data.
+        
+        Args:
+            st_data: An AnnData object of spatial transcriptomic data to be deconvolute.
+            min_prop: A threshold value below which the predicted value will be set to 0. 
+            model_path: A string representing the path of saved model file.
+            use_best_model: If True, the model with the least loss will be used, otherwise, the last trained model will be used.
+            add_obs: If True, the predicted results will be writen to the obs of input AnnData object of spatial transcriptomic data.
+            add_uns: If True, the name of predicted cell types will be writen to the uns of input AnnData object of spatial transcriptomic data
+        
+        Returns:
+            A DataFrame contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
+        """
         if st_data is None:
             st_data = self.st_data
         # st_data_norm = data_utils.normalize_mtx(st_data,target_sum=1e4)

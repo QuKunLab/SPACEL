@@ -40,6 +40,32 @@ def init_model(
     rec_loss_axis=0,
     seed=42
 ):
+    """Initialize Spoint model.
+    
+    Given specific data and parameters to initialize Spoint model.
+
+    Args:
+        sc_ad: An AnnData object representing single cell reference.
+        st_ad: An AnnData object representing spatial transcriptomic data.
+        celltype_key: A string representing cell types annotation columns in obs of single cell reference.
+        sc_genes: A sequence of strings containing genes of single cell reference used in Spoint model. Only used when used_genes is None.
+        st_genes: A sequence of strings containing genes of spatial transcriptomic data used in Spoint model. Only used when used_genes is None.
+        used_genes: A sequence of strings containing genes used in Spoint model.
+        deg_method: A string passed to method parameter of scanpy.tl.rank_genes_groups.
+        n_top_markers: The number of differential expressed genes in each cell type of single cell reference used in Spoint model.
+        n_top_hvg: The number of highly variable genes of spatial transcriptomic data used in Spoint model.
+        log2fc_min: The threshold of log2 fold-change used for filtering differential expressed genes of single cell reference.
+        pval_cutoff: The threshold of p-value used for filtering differential expressed genes of single cell reference.
+        pct_min: The threshold of precentage of expressed cells used for filtering differential expressed genes of single cell reference.
+        st_batch_key: A column name in obs of spatial transcriptomic data representing batch groups of spatial transcriptomic data.
+        sm_size: The number of simulated spots.
+        hiddem_dims: The number of nodes of hidden layers in Spoint model.
+        n_threads: The number of cpu core used for parallel.
+    
+    Returns:
+        A SpointModel object.
+    """
+    
     print('Setting global seed:', seed)
     random.seed(seed)
     np.random.seed(seed)
