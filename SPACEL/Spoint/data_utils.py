@@ -13,8 +13,6 @@ import logging
 #                     datefmt='%m-%d %H:%M')
 # logging.getLogger().setLevel(print)
 
-import os
-os.environ['R_HOME'] = '/home/qukun/xuhao/miniconda3/envs/sjs/lib/R'
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
 
