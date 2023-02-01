@@ -6,7 +6,47 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 
-def plot_3d(loc,val=None,color=None,figsize=(8,8),return_fig=False,elev=None,azim=None,xlim=None,ylim=None,zlim=None,frameon=True,save_path=None,save_dpi=150,show=True,*args,**kwargs):
+def plot_3d(
+    loc,
+    val=None, 
+    color=None, 
+    figsize=(8,8), 
+    return_fig=False, 
+    elev=None, 
+    azim=None, 
+    xlim=None, 
+    ylim=None, 
+    zlim=None, 
+    frameon=True, 
+    save_path=None, 
+    save_dpi=150, 
+    show=True,
+    *args,
+    **kwargs
+):
+        """Plot all slices SPACELed in 3D
+        
+        Plot all slices SPACELed with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
+
+        Args:
+            loc: An array of the coordinates of each spots/cells in all slices, which the first three columns are X-axis, Y-axis, Z-axis coordinates.
+            val: The colors of each spots/cells given in loc use to plot. 
+            color: The colors of each spots/cells given in loc use to plot. 
+            figsize: Size of the figure.
+            return_fig: Whether to return the figure. 
+            elev: The elevation angle in the vertical plane in degrees. If None then the initial value as specified in the `Axes3D` constructor is used.
+            azim: The azimuth angle in the horizontal plane in degrees. If None then the initial value as specified in the `Axes3D` constructor is used. 
+            xlim: A tuple given the left and right xlims in X-axis. 
+            ylim: A tuple given the left and right xlims in Y-axis. 
+            zlim: A tuple given the left and right xlims in Z-axis. 
+            frameon: Whether to hide the coordinate axes.  
+            save_path: A string representing the path directory where the figure saved. 
+            save_dpi: The resolution in dots per inch.
+            show: Whether to show the figure. 
+        
+        Returns:
+            `matplotlib.figure.Figure`
+        """
     if 'marker' not in kwargs.keys():
         kwargs['marker'] = 'o'
     if 's' not in kwargs.keys():
@@ -53,7 +93,36 @@ def plot_single_slice(adata, spatial_key, cluster_key, frameon=False, i=1, j=1, 
     if not frameon:
         plt.axis('off')
 
-def plot_SPACELed_slices(ad_list, spatial_key, cluster_key, legend=True, frameon=False, colors=None, i=1, j=1, s=1):
+def plot_SPACELed_slices(
+    ad_list, 
+    spatial_key, 
+    cluster_key, 
+    legend=True, 
+    frameon=False, 
+    colors=None, 
+    i=1, 
+    j=1, 
+    s=1
+):
+        """Plot all slices SPACELed
+        
+        Plot all slices SPACELed in one figure with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
+
+        Args:
+            ad_list: A list containing all slices in AnnData object.
+            spatial_key: A string representing one key of ``obsm`` in AnnData object of all slices, containing the coordinates used to plot.
+            cluster_key: A string representing one column of ``obs`` in AnnData object of all slices, containing the spatial domain information used to plot.
+            legend: Whether to display the legend.
+            frameon: Whether to hide the coordinate axes. 
+            colors: A list of colors for each spatial domain to plot. If ``None``, it will default to tab10 or tab20 in seaborn.
+            i: Number of rows of the subplots.
+            j: Number of columns of the subplots. If i=j=1, it will be a single figure.
+            s: Size of points.
+        
+        Returns:
+            None
+        """
+    
     clusters = []
     colored_num = 0
     for ad in ad_list:
