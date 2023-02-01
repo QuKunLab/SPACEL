@@ -135,29 +135,29 @@ def align(
     *args,
     **kwargs
 ):
-        """Pairwise alignment.
-        
-        Pairwise align the slices in ad_list. The aligned coordinates are saved in ``.obsm[aligned_loc_key]`` in each slices of ``ad_list``.
+    """Pairwise alignment.
+    
+    Pairwise align the slices in ad_list. The aligned coordinates are saved in ``.obsm[aligned_loc_key]`` in each slices of ``ad_list``.
 
-        Args:
-            ad_list: A list containing all slice data in AnnData object.
-            cluster_key: A string representing one column of ``obs`` in AnnData object, containing the spatial domain information used for alignment.
-            output_path: A string representing the path directory where the alignment parameters are saved. If ``None``, it will be 'Scube_outputs'.
-            raw_loc_key: A string representing one key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the raw coordinates.
-            aligned_loc_key: A string written to a key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the aligned coordinates.
-            n_neighbors: A number of neighbors in target slices considered by each spot/cell in source slices.
-            knn_exclude_cutoff: A number used to filter the neighbors in KNN. The neighbor will be exclude when the distance of neighbors larger than the median of neareast ``n_neighbors + knn_exclude_cutoff`` neighbors distance in all spot/cell in target slice.
-            p: Degree of the penalty function.
-            a: Coefficient of the penalty function.
-            bound_alpha: For the optimized boundary, the multiplier based on the maximum and minimum values of the slice coordinates.
-            write_loc_path: A string representing the path directory where the aligned coordinates of all slices are saved. If ``None``, it won't be saved.
-            n_threads: The number of parallel threads for the optimization algorithm.
-            seed: Seed for the optimization algorithm.
-            subset_prop: The downsampling ratio for cells in each slice.
-        
-        Returns:
-            None
-        """
+    Args:
+        ad_list: A list containing all slice data in AnnData object.
+        cluster_key: A string representing one column of ``obs`` in AnnData object, containing the spatial domain information used for alignment.
+        output_path: A string representing the path directory where the alignment parameters are saved. If ``None``, it will be 'Scube_outputs'.
+        raw_loc_key: A string representing one key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the raw coordinates.
+        aligned_loc_key: A string written to a key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the aligned coordinates.
+        n_neighbors: A number of neighbors in target slices considered by each spot/cell in source slices.
+        knn_exclude_cutoff: A number used to filter the neighbors in KNN. The neighbor will be exclude when the distance of neighbors larger than the median of neareast ``n_neighbors + knn_exclude_cutoff`` neighbors distance in all spot/cell in target slice.
+        p: Degree of the penalty function.
+        a: Coefficient of the penalty function.
+        bound_alpha: For the optimized boundary, the multiplier based on the maximum and minimum values of the slice coordinates.
+        write_loc_path: A string representing the path directory where the aligned coordinates of all slices are saved. If ``None``, it won't be saved.
+        n_threads: The number of parallel threads for the optimization algorithm.
+        seed: Seed for the optimization algorithm.
+        subset_prop: The downsampling ratio for cells in each slice.
+    
+    Returns:
+        None
+    """
     if subset_prop is not None:
         for i in range(len(ad_list)):
             ad_list[i] = ad_list[i][np.random.permutation(ad_list[i].obs_names)[:int(ad_list[i].shape[0]*subset_prop)]].copy()
