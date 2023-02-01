@@ -24,9 +24,9 @@ def plot_3d(
     *args,
     **kwargs
 ):
-        """Plot all slices SPACELed in 3D
+        """Plot all slices stacked in 3D
         
-        Plot all slices SPACELed with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
+        Plot all slices stacked with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
 
         Args:
             loc: An array of the coordinates of each spots/cells in all slices, which the first three columns are X-axis, Y-axis, Z-axis coordinates.
@@ -93,7 +93,7 @@ def plot_single_slice(adata, spatial_key, cluster_key, frameon=False, i=1, j=1, 
     if not frameon:
         plt.axis('off')
 
-def plot_SPACELed_slices(
+def plot_stacked_slices(
     ad_list, 
     spatial_key, 
     cluster_key, 
@@ -104,9 +104,9 @@ def plot_SPACELed_slices(
     j=1, 
     s=1
 ):
-        """Plot all slices SPACELed
+        """Plot all slices stacked
         
-        Plot all slices SPACELed in one figure with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
+        Plot all slices stacked in one figure with a given number of subplots rows and columns. Spots/cells colored by spatial domain.
 
         Args:
             ad_list: A list containing all slices in AnnData object.
