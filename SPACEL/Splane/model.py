@@ -125,7 +125,7 @@ class SplaneModel():
             prefix: A string added to the prefix of file name of saved model.
         
         Returns:
-            None
+            ``None``
         """
         best_loss = np.inf
         best_db_loss = np.inf
@@ -180,7 +180,7 @@ class SplaneModel():
             key: A string written to column of obs in AnnData object of spatial transcriptomic data.
         
         Returns:
-            None
+            ``None``
         """
         if colors is None:
             if self.n_clusters > 10:
@@ -237,7 +237,7 @@ def init_model(
         simi_neighbor: The order of neighbors used for similarity loss. If is None, It equal to the order used for constructed graph.
         seed: Random number seed.
     Returns:
-        A DataFrame contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
+        A ``DataFrame`` contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
     """
     
     print('Setting global seed:', seed)

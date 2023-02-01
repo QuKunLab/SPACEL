@@ -602,7 +602,7 @@ class SpointModel():
             scvi_batch_size: The batch size of scVI.
         
         Returns:
-            None
+            ``None``
         """
 
         self.get_scvi_latent(
@@ -714,7 +714,7 @@ class SpointModel():
             add_uns: If True, the name of predicted cell types will be writen to the uns of input AnnData object of spatial transcriptomic data
         
         Returns:
-            A DataFrame contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
+            A ``DataFrame`` contained deconvoluted results. Each row representing a spot, and each column representing a cell type.
         """
         if st_data is None:
             st_data = self.st_data

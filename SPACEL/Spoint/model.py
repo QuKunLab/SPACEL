@@ -48,8 +48,8 @@ def init_model(
         sc_ad: An AnnData object representing single cell reference.
         st_ad: An AnnData object representing spatial transcriptomic data.
         celltype_key: A string representing cell types annotation columns in obs of single cell reference.
-        sc_genes: A sequence of strings containing genes of single cell reference used in Spoint model. Only used when used_genes is None.
-        st_genes: A sequence of strings containing genes of spatial transcriptomic data used in Spoint model. Only used when used_genes is None.
+        sc_genes: A sequence of strings containing genes of single cell reference used in Spoint model. Only used when ``used_genes`` is None.
+        st_genes: A sequence of strings containing genes of spatial transcriptomic data used in Spoint model. Only used when ``used_genes`` is None.
         used_genes: A sequence of strings containing genes used in Spoint model.
         deg_method: A string passed to method parameter of scanpy.tl.rank_genes_groups.
         n_top_markers: The number of differential expressed genes in each cell type of single cell reference used in Spoint model.
@@ -63,7 +63,7 @@ def init_model(
         n_threads: The number of cpu core used for parallel.
     
     Returns:
-        A SpointModel object.
+        A ``SpointModel`` object.
     """
     
     print('Setting global seed:', seed)

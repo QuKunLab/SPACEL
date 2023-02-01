@@ -156,7 +156,7 @@ def align(
         subset_prop: The downsampling ratio for cells in each slice.
     
     Returns:
-        None
+        ``None``
     """
     if subset_prop is not None:
         for i in range(len(ad_list)):
