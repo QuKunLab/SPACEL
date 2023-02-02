@@ -13,7 +13,8 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
     * [Splane tutorial: Identify uniform spatial domain in multiple slices](tutorial/identification_of_uniform_spatial_domain.ipynb)
     * [Scube tutorial: Alignment of multiple spatial transcriptomic slices](tutorial/alignment_of_multiple_slices.ipynb)
     * [Scube tutorial: 3D expression modeling with gaussian process regression](tutorial/3D_expression_modeling.ipynb)
-Read the [documentation](https://SPACEL.readthedocs.io) for more information.
+
+Read the [documentation](https://spacel.readthedocs.io) for more information.
     
 ## Requirements
 
