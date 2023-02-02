@@ -1,0 +1,6 @@
+-r ../requirements.txt
+sphinx
+sphinx-rtd-theme
+myst-parser
+sphinx-autodoc-typehints
+nbsphinx
