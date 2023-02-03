@@ -1,4 +1,7 @@
+[![Documentation Status](https://readthedocs.org/projects/spacel/badge/?version=latest)](https://spacel.readthedocs.io/en/latest/?badge=latest)
+
 # SPACEL: characterizing spatial transcriptome architectures by deep-learning
+
 ![Overview](docs/_static/img/figure1.png "Overview")
 SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earning) is a Python package of deep-learning-based methods for ST data analysis. SPACEL consists of three modules: 
 * Spoint embedded a multiple-layer perceptron with a probabilistic model to deconvolute cell type composition for each spot on single ST slice.
