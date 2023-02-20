@@ -87,8 +87,8 @@ def score(warp_param, target_loc, source_loc, target_cluster, source_cluster,k,k
     for x,y in source_loc:
         new_source_loc.append(rotate_loc(x,y,x0,y0,warp_param[0]))
     new_source_loc = np.array(new_source_loc)
-    new_source_loc[:,0] += warp_param[1]  #x方向平移
-    new_source_loc[:,1] += warp_param[2]  #y方向平移
+    new_source_loc[:,0] += warp_param[1]
+    new_source_loc[:,1] += warp_param[2]
     return -neighbor_simi_fast(new_source_loc, target_loc, source_cluster, target_cluster, k, knn_exclude_cutoff,p,a)
 
 def optimize(target_loc, source_loc, target_cluster, source_cluster, n_neighbors, knn_exclude_cutoff ,p,a, bound_alpha,n_threads,*args,**kwargs): 
@@ -96,16 +96,24 @@ def optimize(target_loc, source_loc, target_cluster, source_cluster, n_neighbors
     source_loc_flip = deepcopy(source_loc)
     source_loc_flip[:,0] = -source_loc_flip[:,0]
     func1 = partial(score, target_loc=target_loc, source_loc=source_loc, target_cluster=target_cluster, source_cluster=source_cluster,k=n_neighbors,knn_exclude_cutoff=knn_exclude_cutoff,p=p,a=a)
-    opm1 = differential_evolution(func1, bounds=((0, 360), (target_loc.min(0)[0]*bound_alpha, target_loc.max(0)[0]*bound_alpha), (target_loc.min(0)[1]*bound_alpha, target_loc.max(0)[1]*bound_alpha)),workers=n_threads,*args,**kwargs)
+    opm1 = differential_evolution(func1, 
+                                  bounds=((0, 360), (target_loc.min(0)[0]*bound_alpha, target_loc.max(0)[0]*bound_alpha), (target_loc.min(0)[1]*bound_alpha, target_loc.max(0)[1]*bound_alpha)),
+                                  workers=n_threads,
+                                  updating='immediate' if n_threads == 1 else 'deferred',
+                                  *args,
+                                  **kwargs)
     score1 = -opm1.fun
     result1 = opm1.x
     
     func2 = partial(score, target_loc=target_loc, source_loc=source_loc_flip, target_cluster=target_cluster, source_cluster=source_cluster,k=n_neighbors,knn_exclude_cutoff=knn_exclude_cutoff,p=p,a=a)
-    opm2 = differential_evolution(func2,bounds=((0, 360), (target_loc.min(0)[0]*bound_alpha, target_loc.max(0)[0]*bound_alpha), (target_loc.min(0)[1]*bound_alpha, target_loc.max(0)[1]*bound_alpha)),workers=n_threads,*args,**kwargs)
+    opm2 = differential_evolution(func2,
+                                  bounds=((0, 360), (target_loc.min(0)[0]*bound_alpha, target_loc.max(0)[0]*bound_alpha), (target_loc.min(0)[1]*bound_alpha, target_loc.max(0)[1]*bound_alpha)),
+                                  workers=n_threads,
+                                  updating='immediate' if n_threads == 1 else 'deferred',
+                                  *args,
+                                  **kwargs)
     score2 = -opm2.fun
     result2 = opm2.x
-
-    print(f'Optimal score: flip = {score1}, not flip = {score2}')
 
     if score1 > score2:
         return 0, result1, score1, 1, result2, score2
@@ -138,7 +146,6 @@ def align(
     """Pairwise alignment.
     
     Pairwise align the slices in ad_list. The aligned coordinates are saved in ``.obsm[aligned_loc_key]`` in each slices of ``ad_list``.
-
     Args:
         ad_list: A list containing all slice data in AnnData object.
         cluster_key: A string representing one column of ``obs`` in AnnData object, containing the spatial domain information used for alignment.
@@ -183,6 +190,12 @@ def align(
         source_xy = ad_list[source_ind].obsm['spatial_pair'][:,:2]
         target_cluster = np.asarray(ad_list[target_ind].obs[cluster_key])
         source_cluster = np.asarray(ad_list[source_ind].obs[cluster_key])
+        cluster_name = np.unique(np.concatenate([target_cluster,source_cluster]))
+        cluster_index = np.arange(len(cluster_name))
+        cluster_name = dict(zip(cluster_name, cluster_index))
+        target_cluster = np.array(pd.Series(target_cluster).replace(cluster_name))
+        source_cluster = np.array(pd.Series(source_cluster).replace(cluster_name))
+        
         param = [i, target_xy, source_xy, target_cluster, source_cluster]
         r = align_pairwise(param, n_neighbors=n_neighbors, knn_exclude_cutoff=knn_exclude_cutoff,p=p,a=a,bound_alpha=bound_alpha, n_threads=n_threads,seed=seed)
         res.append(r)
@@ -192,7 +205,6 @@ def align(
     
     warp_info = warp_info[:,:6]
     score = warp_info[:,5]
-    print('All score:', str(score))
     print('Runtime: ' + str(time.time() - start),'s')
 
     ad_list[0].obsm[aligned_loc_key] = ad_list[0].obsm['spatial_pair']
