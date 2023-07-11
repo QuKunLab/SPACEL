@@ -254,22 +254,20 @@ class SplaneModel():
         save_path=None,
         prefix=None
     ):
-
-    """Training Splane model.
-
-    Args:
-        max_steps: The max step of training. The training process will be stop when achive max step.
-        convergence: The total loss threshold for early stop.
-        db_convergence: The DBS threshold for early stop.
-        early_stop_epochs: The max epochs of loss difference less than convergence.
-        d_l: The weight of discriminator loss.
-        simi_l: The weight of similarity loss.
-        plot_step: The interval steps of training.
-        save_path: A string representing the path directory where the model is saved.
-        prefix: A string added to the prefix of file name of saved model.
-    Returns:
-        ``None``
-    """
+        """Training Splane model.
+        Args:
+            max_steps: The max step of training. The training process will be stop when achive max step.
+            convergence: The total loss threshold for early stop.
+            db_convergence: The DBS threshold for early stop.
+            early_stop_epochs: The max epochs of loss difference less than convergence.
+            d_l: The weight of discriminator loss.
+            simi_l: The weight of similarity loss.
+            plot_step: The interval steps of training.
+            save_path: A string representing the path directory where the model is saved.
+            prefix: A string added to the prefix of file name of saved model.
+        Returns:
+            ``None``
+        """
         best_loss = np.inf
         best_db_loss = np.inf
         best_simi_loss = np.inf
@@ -279,11 +277,9 @@ class SplaneModel():
             save_path = os.path.join(tempfile.gettempdir() ,'Splane_models_'+strftime("%Y%m%d%H%M%S",localtime()))
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        
         early_stop_count = 0
         pbar = tqdm(range(max_epochs))
         for epoch in pbar:
-
             for _ in range(g_step):
                 train_total_loss = self.train_model_g(d_l=d_l, simi_l=simi_l)
             for _ in range(d_step):
