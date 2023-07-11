@@ -13,6 +13,18 @@ def one_hot_encode(labels, unique_labels=None):
     return encoded, unique_labels
 
 def add_cell_type_composition(ad, prop_df=None, celltype_anno=None, all_celltypes=None):
+    """Initialize Splane model.
+    
+    Build the model then set the data and paratemters. 
+    
+    Args:
+        ad: A AnnData object of spatial transcriptomic data as Splane input.
+        prop_df: A DataFrame of cell type composition used for spot-based spatial transcriptomic data.
+        celltype_anno`: A list containing the cell type annotations for each cell in the single-cell resolution spatial transcriptomic data. This parameter is not used if `prof_ad` is provided.
+        all_celltypes`: A list of all cell types present in all slices. This parameter is used when a single slice does not cover all cell types in the dataset.
+    Returns:
+        ``None``
+    """
     if prop_df is not None:
         if all_celltypes is not None:
             prop_df.loc[:,np.setdiff1d(all_celltypes, prop_df.columns)] = 0
