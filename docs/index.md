@@ -1,4 +1,5 @@
-[![Documentation Status](https://readthedocs.org/projects/spacel/badge/?version=latest)](https://spacel.readthedocs.io/en/latest/?badge=latest) ![PyPI](https://img.shields.io/pypi/v/SPACEL)
+[![Documentation Status](https://readthedocs.org/projects/spacel/badge/?version=latest)](https://spacel.readthedocs.io/en/latest/?badge=latest)
+![PyPI](https://img.shields.io/pypi/v/SPACEL)
 
 # SPACEL: characterizing spatial transcriptome architectures by deep-learning
 
