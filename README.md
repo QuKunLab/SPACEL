@@ -18,6 +18,13 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
     * [Scube tutorial: 3D expression modeling with gaussian process regression](docs/tutorials/3D_expression_modeling.ipynb)
 
 Read the [documentation](https://spacel.readthedocs.io) for more information.
+
+## Latest updates
+### Version 1.1.0 2023-07-11
+#### Features
+* All code based on `Tensorflow` have been mirated to `PyTorch`, it does not have `Tensorflow` as dependency anymore.
+* The `Splane.utils.add_cell_type_composition` function has been implemented to facilitate the cell type composition predicted by deconvolution methods into Splane.
+* Spoint and Splane now support tqdm type output for improved progress tracking.
     
 ## Requirements
 
@@ -44,5 +51,5 @@ Note: If you want to run 3D expression GPR model in Scube, you need to install t
 ## Installation
 * Install `SPACEL`:
 ```
-pip install spacel
+pip install SPACEL
 ```
