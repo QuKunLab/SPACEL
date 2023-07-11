@@ -29,7 +29,7 @@ setup(
         "seaborn",
         "scanpy",
         "numba",
-        "torch<=1.13.*",
+        "torch<=1.13",
         "gpytorch",
         "torchmetrics",
     ],

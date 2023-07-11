@@ -6,7 +6,7 @@ scanpy
 scvi-tools
 rpy2==3.3.*
 squidpy
-torch<=1.13.*
+torch<=1.13
 scipy
 gpytorch
 torchmetrics
