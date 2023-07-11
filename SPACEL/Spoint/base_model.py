@@ -1,4 +1,3 @@
-import tensorflow as tf
 from . import model
 from . import data_utils
 import numpy as np
@@ -9,190 +8,98 @@ import anndata
 from . import metrics
 import matplotlib.pyplot as plt
 import os
+import tempfile
 from copy import deepcopy
 import logging
 import itertools
 from functools import partial
+from tqdm import tqdm
+from time import strftime, localtime
+from scipy.sparse import issparse
+from sklearn.decomposition import PCA
 
-def guassian_kernel(source, target):
-    n_samples = int(source.shape[0])+int(target.shape[0])
-    total = np.concatenate((source, target), axis=0)
-    total0 = np.expand_dims(total,axis=0)
-    total0= np.broadcast_to(total0,[int(total.shape[0]), int(total.shape[0]), int(total.shape[1])])
-    total1 = np.expand_dims(total,axis=1)
-    total1=np.broadcast_to(total1,[int(total.shape[0]), int(total.shape[0]), int(total.shape[1])])
-    L2_distance_square = np.cumsum(np.square(total0-total1),axis=2)
-    bandwidth = np.sum(L2_distance_square) / (n_samples**2-n_samples)
-    kernel_val = np.exp(-L2_distance_square / bandwidth)
-    return kernel_val
-
-def MMD(source, target):
-    batch_size = int(source.shape[0])
-    kernels = guassian_kernel(source, target)
-    loss = 0
-    for i in range(batch_size):
-        s1, s2 = i, (i + 1) % batch_size
-        t1, t2 = s1 + batch_size, s2 + batch_size
-        loss += kernels[s1, s2] + kernels[t1, t2]
-        loss -= kernels[s1, t2] + kernels[s2, t1]
-    n_loss= loss / float(batch_size)
-    return np.mean(n_loss)
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, BatchSampler
+from torch.nn.parameter import Parameter
+from torch.nn.modules.module import Module
+from torch.utils.data.dataloader import default_collate
 
 def compute_kernel(x, y):
-    x_size = tf.shape(x)[0]
-    y_size = tf.shape(y)[0]
-    dim = tf.shape(x)[1]
-    tiled_x = tf.tile(tf.reshape(x, tf.stack([x_size, 1, dim])), tf.stack([1, y_size, 1]))
-    tiled_y = tf.tile(tf.reshape(y, tf.stack([1, y_size, dim])), tf.stack([x_size, 1, 1]))
-    return tf.exp(-tf.reduce_mean(tf.square(tiled_x - tiled_y), axis=2) / tf.cast(dim, tf.float32))
+    x_size = x.size(0)
+    y_size = y.size(0)
+    dim = x.size(1)
+
+    tiled_x = x.unsqueeze(1).expand(x_size, y_size, dim)
+    tiled_y = y.unsqueeze(0).expand(x_size, y_size, dim)
+
+    kernel = torch.exp(-torch.square(tiled_x - tiled_y).mean(dim=2) / dim)
+    return kernel
 
 def compute_mmd(x, y):
     x_kernel = compute_kernel(x, x)
     y_kernel = compute_kernel(y, y)
     xy_kernel = compute_kernel(x, y)
-    return tf.reduce_mean(x_kernel) + tf.reduce_mean(y_kernel) - 2 * tf.reduce_mean(xy_kernel)
 
-def scale(z):
-    zmax = tf.reduce_max(z,axis=1, keepdims=True)
-    zmin = tf.reduce_min(z,axis=1, keepdims=True)
-    z_std = (z - zmin) / (zmax - zmin)
-    return z_std
+    mmd = x_kernel.mean() + y_kernel.mean() - 2 * xy_kernel.mean()
+    return mmd
 
-def l2_activation(x):
-    x = scale(x)
-    x = tf.nn.l2_normalize(x,axis=1)
-    return x
-
-class BatchNormalization(tf.keras.layers.BatchNormalization):
-    """
-    Identical to keras.layers.BatchNormalization, but adds the option to freeze parameters.
-    """
-    def __init__(self, *args, **kwargs):
-        super(BatchNormalization, self).__init__(*args, **kwargs)
-
-    def call(self, inputs, **kwargs):
-        kwargs['training'] = True
-        return super(BatchNormalization, self).call(inputs, **kwargs)
-
-class BaseModel(tf.keras.models.Model):
+class PredictionModel(nn.Module):
     def __init__(
-        self, 
-        input_dims,
-        latent_dims,
-        hidden_dims,
-        celltype_dims,
-        ae_hidden_layers,
-        disc_hidden_layers,
-        pred_hidden_layers,
-        always_batch_norm,
-    ):
-        super(BaseModel, self).__init__()
-        self.encoder = self.build_encoder(input_dims,latent_dims,hidden_dims,ae_hidden_layers,output_dropout_rate=0.5,always_batch_norm=always_batch_norm)
-        self.decoder = self.build_decoder(latent_dims,input_dims,hidden_dims,ae_hidden_layers,output_dropout=False)
-        self.disc = self.build_disc(latent_dims,hidden_dims,disc_hidden_layers)
-        self.pred = self.build_pred(latent_dims,celltype_dims,hidden_dims,pred_hidden_layers)
-        
-
-    def build_encoder(
         self,
         input_dims,
         latent_dims,
         hidden_dims,
-        ae_hidden_layers=3,
-        output_dropout=True,
-        output_dropout_rate=0.5,
-        hidden_initializer=tf.keras.initializers.HeNormal(),
-        output_initializer=tf.keras.initializers.GlorotUniform(),
-        output_activation=l2_activation,
-        always_batch_norm=False
-    ):
-        if always_batch_norm:
-            bathnorm = BatchNormalization
-        else:
-            bathnorm = tf.keras.layers.BatchNormalization
-        encoder = tf.keras.Sequential()
-        encoder.add(tf.keras.Input(shape=(input_dims,)))
-        for i in range(ae_hidden_layers):
-            encoder.add(tf.keras.layers.Dense(hidden_dims,kernel_initializer=hidden_initializer,kernel_regularizer='l1_l2'))
-            encoder.add(bathnorm(name='encoder_bn'+str(i)))
-            encoder.add(tf.keras.layers.LeakyReLU())
-        if output_dropout:
-            encoder.add(tf.keras.layers.Dropout(output_dropout_rate, name='encoder_dp'))
-        encoder.add(tf.keras.layers.Dense(latent_dims, activation=output_activation,kernel_initializer=output_initializer))
-        return encoder
-    
-    def build_decoder(
-        self,
-        input_dims,
-        output_dims,
-        hidden_dims,
-        ae_hidden_layers=3,
-        output_dropout=False,
-        output_dropout_rate=0.5,
-        hidden_initializer=tf.keras.initializers.HeNormal(),
-        output_initializer=tf.keras.initializers.GlorotUniform(),
-        output_activation=None
-    ):
-        decoder = tf.keras.Sequential()
-        decoder.add(tf.keras.Input(shape=(input_dims,)))
-        for i in range(ae_hidden_layers):
-            decoder.add(tf.keras.layers.Dense(hidden_dims,kernel_initializer=hidden_initializer,kernel_regularizer='l1_l2'))
-            decoder.add(tf.keras.layers.LeakyReLU())
-        if output_dropout:
-            decoder.add(tf.keras.layers.Dropout(output_dropout_rate, name='decoder_dp'))
-        decoder.add(tf.keras.layers.Dense(output_dims,kernel_initializer=output_initializer))
-        return decoder
-    
-    def build_disc(
-        self,
-        input_dims,
-        hidden_dims,
-        disc_hidden_layers=1,
-        hidden_initializer=tf.keras.initializers.HeNormal(),
-        output_initializer=tf.keras.initializers.GlorotUniform(),
-        output_activation='sigmoid'
-    ):
-        disc = tf.keras.Sequential()
-        disc.add(tf.keras.Input(shape=input_dims,))
-        for i in range(disc_hidden_layers):
-            disc.add(tf.keras.layers.Dense(hidden_dims,kernel_initializer=hidden_initializer,kernel_regularizer='l1_l2'))
-            disc.add(tf.keras.layers.LeakyReLU())
-        disc.add(tf.keras.layers.Dense(1,kernel_initializer=output_initializer,activation=output_activation))
-        return disc
-        
-    def build_pred(
-        self,
-        input_dims,
         celltype_dims,
-        hidden_dims,
-        pred_hidden_layers=1,
-        hidden_initializer=tf.keras.initializers.HeNormal(),
-        output_initializer=tf.keras.initializers.GlorotUniform(),
-        output_activation='softmax'
+        dropout
     ):
-        pred = tf.keras.Sequential()
-        pred.add(tf.keras.Input(shape=input_dims,))
-        for i in range(pred_hidden_layers):
-            pred.add(tf.keras.layers.Dense(hidden_dims,kernel_initializer=hidden_initializer,kernel_regularizer='l1_l2'))
-            pred.add(tf.keras.layers.LeakyReLU())
-        pred.add(tf.keras.layers.Dense(celltype_dims,kernel_initializer=output_initializer,activation=output_activation))
-        return pred
+        super(PredictionModel, self).__init__()
+        
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dims, hidden_dims),
+            nn.LeakyReLU(),
+            nn.LayerNorm(hidden_dims),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dims, latent_dims),
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(celltype_dims, hidden_dims),
+            nn.LeakyReLU(),
+            nn.LayerNorm(hidden_dims),
+            nn.Linear(hidden_dims, hidden_dims),
+            nn.LeakyReLU(),
+            nn.LayerNorm(hidden_dims),
+            nn.Linear(hidden_dims, hidden_dims),
+            nn.LeakyReLU(),
+            nn.LayerNorm(hidden_dims),
+            nn.Linear(hidden_dims, input_dims)
+        )
+        self.pred = nn.Sequential(
+            nn.Linear(latent_dims, hidden_dims),
+            nn.LeakyReLU(),
+            nn.LayerNorm(hidden_dims),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dims, celltype_dims),
+            nn.Softmax(dim=1),
+        )
+                
+        nn.init.kaiming_normal_(self.encoder[0].weight)
+        nn.init.kaiming_normal_(self.encoder[4].weight)
+        nn.init.kaiming_normal_(self.decoder[0].weight)
+        nn.init.kaiming_normal_(self.decoder[3].weight)
+        nn.init.kaiming_normal_(self.decoder[6].weight)
+        nn.init.xavier_uniform_(self.decoder[-1].weight)
+        nn.init.kaiming_normal_(self.pred[0].weight)
+        nn.init.xavier_uniform_(self.pred[4].weight)
 
-    def call(self, x):
-        encoded = self.encoder(x)
-        pred = self.pred(encoded)
-        return encoded, pred
+    def forward(self, x):
+        z = self.encoder(x)
+        pred = self.pred(z)
+        decoded = self.decoder(pred)
+        return z, pred, decoded
 
-def kl_divergence(y_true, y_pred, axis=1):
-    y_pred = tf.keras.backend.clip(y_pred, tf.keras.backend.epsilon(), np.inf)
-    y_pred = tf.convert_to_tensor(y_pred)
-    y_true = tf.cast(y_true, y_pred.dtype)
-    y_true = tf.math.divide_no_nan(y_true, tf.reduce_sum(y_true, axis=axis, keepdims=True))
-    y_pred = tf.math.divide_no_nan(y_pred, tf.reduce_sum(y_pred, axis=axis, keepdims=True))
-    y_true = tf.keras.backend.clip(y_true, tf.keras.backend.epsilon(), 1)
-    y_pred = tf.keras.backend.clip(y_pred, tf.keras.backend.epsilon(), 1)
-    return tf.reduce_sum(tf.multiply(y_true, tf.math.log(tf.math.divide_no_nan(y_true,y_pred))), axis=axis)
-    
 class SpointModel():
     def __init__(
         self, 
@@ -201,19 +108,28 @@ class SpointModel():
         clusters, 
         used_genes, 
         spot_names, 
+        use_rep,
         st_batch_key=None,
-        scvi_dims=64,
+        scvi_layers=2,
+        scvi_latent=64,
+        scvi_gene_likelihood='zinb',
+        scvi_dispersion='gene-batch',
         latent_dims=32, 
         hidden_dims=512,
-        ae_hidden_layers=3,
-        disc_hidden_layers=1,
-        pred_hidden_layers=1,
+        infer_losses=['kl','cos'],
+        l1=0.01,
+        l2=0.01,
         sm_lr=3e-4,
-        st_lr=3e-4,
-        disc_lr=3e-4,
-        always_batch_norm=False,
-        rec_loss_axis=0
+        st_lr=3e-5,
+        use_gpu=None,
+        seed=42
     ):
+        if ((use_gpu is None) or (use_gpu is True)) and (torch.cuda.is_available()):
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
+        self.use_gpu = use_gpu
+        
         self.st_ad = st_ad
         self.sm_ad = sm_ad
         self.scvi_dims=64
@@ -221,36 +137,71 @@ class SpointModel():
         self.used_genes = used_genes
         self.clusters = clusters
         self.st_batch_key = st_batch_key
-        self.mse_loss_func = None
-        self.kl_loss_func = None
-        self.cosine_infer_loss_func = None
-        self.cosine_rec_loss_func = None
-        self.sm_optimizer = None
-        self.st_optimizer = None
-        self.sm_train_rec_loss = None
-        self.sm_train_infer_loss = None
-        self.sm_train_loss = None
-        self.sm_test_rec_loss = None
-        self.sm_test_infer_loss = None
-        self.sm_test_loss = None
-        self.st_train_rec_loss = None
-        self.st_test_rec_loss = None
-        self.rec_loss_axis = rec_loss_axis
-        self.model = self.build_model(scvi_dims,len(clusters),latent_dims,hidden_dims,sm_lr,st_lr,disc_lr,ae_hidden_layers,disc_hidden_layers,pred_hidden_layers,always_batch_norm)
+        self.scvi_layers = scvi_layers
+        self.scvi_latent = scvi_latent
+        self.scvi_gene_likelihood = scvi_gene_likelihood
+        self.scvi_dispersion = scvi_dispersion
+        self.kl_infer_loss_func = partial(self.kl_divergence, dim=1)
+        self.kl_rec_loss_func = partial(self.kl_divergence, dim=1)
+        self.cosine_infer_loss_func = partial(F.cosine_similarity, dim=1)
+        self.cosine_rec_loss_func = partial(F.cosine_similarity, dim=1)
+        self.rmse_loss_func = self.rmse
+        self.infer_losses = infer_losses
+        self.mmd_loss = compute_mmd
+        self.l1 = l1
+        self.l2 = l2
+        self.use_rep = use_rep
+        if use_rep == 'scvi':
+            self.feature_dims = scvi_latent
+        elif use_rep == 'X':
+            self.feature_dims = st_ad.shape[1]
+        elif use_rep == 'pca':
+            self.feature_dims = 50
+        else:
+            raise ValueError('use_rep must be one of scvi, pca and X.')
+        self.latent_dims = latent_dims
+        self.hidden_dims = hidden_dims
+        self.sm_lr = sm_lr
+        self.st_lr = st_lr
+        self.init_model()
+        self.st_data = None
+        self.sm_data = None
+        self.sm_labels = None
         self.best_path = None
-        self.history = pd.DataFrame(columns = ['sm_train_rec_loss','sm_train_infer_loss','sm_test_rec_loss','sm_test_infer_loss','sm_test_loss','st_train_rec_loss','is_best'])
-        # logging.getLogger('spoint').setLevel(print)
+        self.history = pd.DataFrame(columns = ['sm_train_rec_loss','sm_train_infer_loss','sm_test_rec_loss','sm_test_infer_loss','st_train_rec_loss','st_test_rec_loss','st_train_mmd_loss','st_test_mmd_loss','is_best'])
+        self.batch_size = None
+        self.seed = seed
+
+    @staticmethod
+    def rmse(y_true, y_pred):
+        mse = F.mse_loss(y_pred, y_true)
+        rmse = torch.sqrt(mse)
+        return rmse
         
+    @staticmethod
+    def kl_divergence(y_true, y_pred, dim=0):
+        y_pred = torch.clip(y_pred, torch.finfo(torch.float32).eps)
+        y_true = y_true.to(y_pred.dtype)
+        y_true = torch.nan_to_num(torch.div(y_true, y_true.sum(dim, keepdims=True)),0)
+        y_pred = torch.nan_to_num(torch.div(y_pred, y_pred.sum(dim, keepdims=True)),0)
+        y_true = torch.clip(y_true, torch.finfo(torch.float32).eps, 1)
+        y_pred = torch.clip(y_pred, torch.finfo(torch.float32).eps, 1)
+        return torch.mul(y_true, torch.log(torch.nan_to_num(torch.div(y_true, y_pred)))).mean(dim)
+    
+    def init_model(self):
+        self.model = PredictionModel(self.feature_dims,self.latent_dims,self.hidden_dims,len(self.clusters),0.8).to(self.device)
+        self.sm_optimizer = optim.Adam(list(self.model.encoder.parameters())+list(self.model.pred.parameters()),lr=self.sm_lr)
+        self.st_optimizer = optim.Adam(list(self.model.encoder.parameters())+list(self.model.decoder.parameters()),lr=self.st_lr)
         
     def get_scvi_latent(
         self,
-        n_layers,
-        n_latent,
-        gene_likelihood,
-        dispersion,
-        max_epochs,
-        early_stopping,
-        batch_size,
+        n_layers=None,
+        n_latent=None,
+        gene_likelihood=None,
+        dispersion=None,
+        max_epochs=100,
+        early_stopping=True,
+        batch_size=4096,
     ):
         if self.st_batch_key is not None:
             if 'simulated' in self.st_ad.obs[self.st_batch_key]:
@@ -269,9 +220,16 @@ class SpointModel():
             layer="counts",
             batch_key="batch"
         )
-
+        if n_layers is None:
+            n_layers = self.scvi_layers
+        if n_latent is None:
+            n_latent = self.scvi_latent
+        if gene_likelihood is None:
+            gene_likelihood = self.scvi_gene_likelihood
+        if dispersion is None:
+            dispersion = self.scvi_dispersion
         vae = scvi.model.SCVI(adata, n_layers=n_layers, n_latent=n_latent, gene_likelihood=gene_likelihood,dispersion=dispersion)
-        vae.train(max_epochs=max_epochs,early_stopping=early_stopping,batch_size=batch_size)
+        vae.train(max_epochs=max_epochs,early_stopping=early_stopping,batch_size=batch_size,use_gpu=self.use_gpu)
         adata.obsm["X_scVI"] = vae.get_latent_representation()
 
         st_scvi_ad = anndata.AnnData(adata[adata.obs['batch'] != 'simulated'].obsm["X_scVI"])
@@ -292,150 +250,104 @@ class SpointModel():
         
         return sm_scvi_ad,st_scvi_ad
 
+    
+    def build_dataset(self, batch_size, device=None):
+        if device is None:
+            device = self.device
+        x_train,y_train,x_test,y_test = data_utils.split_shuffle_data(np.array(self.sm_data,dtype=np.float32),np.array(self.sm_labels,dtype=np.float32))
         
-    def build_model(
-        self,
-        input_dims,
-        celltype_dims,
-        latent_dims,
-        hidden_dims,
-        sm_lr,
-        st_lr,
-        disc_lr,
-        ae_hidden_layers,
-        disc_hidden_layers,
-        pred_hidden_layers,
-        always_batch_norm
-    ):
-        self.mse_loss_func = tf.keras.losses.MeanSquaredError()
-        self.kl_infer_loss_func = partial(kl_divergence, axis=1)
-        self.kl_rec_loss_func = partial(kl_divergence, axis=self.rec_loss_axis)
-        self.cosine_infer_loss_func = tf.keras.losses.CosineSimilarity(axis=1)
-        self.cosine_rec_loss_func = tf.keras.losses.CosineSimilarity(axis=self.rec_loss_axis)
-        self.bce_loss_func = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+        x_train = torch.tensor(x_train).to(device)
+        y_train = torch.tensor(y_train).to(device)
+        x_test = torch.tensor(x_test).to(device)
+        y_test = torch.tensor(y_test).to(device)
+        st_data = torch.tensor(self.st_data).to(device)
         
-        self.sm_optimizer = tf.keras.optimizers.Adam(lr=sm_lr)
-        self.st_optimizer = tf.keras.optimizers.Adam(lr=st_lr)
-        self.disc_optimizer = tf.keras.optimizers.Adam(lr=disc_lr)
+        self.sm_train_ds = TensorDataset(x_train, y_train)
+        self.sm_test_ds = TensorDataset(x_test,y_test)
+        self.st_ds = TensorDataset(st_data)
+        
+        self.sm_train_batch_size = min(len(self.sm_train_ds), batch_size)
+        self.sm_test_batch_size = min(len(self.sm_test_ds), batch_size)
+        self.st_batch_size = min(len(self.st_ds), batch_size)
+        
+        g = torch.Generator()
+        g.manual_seed(self.seed)
+        self.sm_train_sampler = BatchSampler(RandomSampler(self.sm_train_ds, generator=g), batch_size=self.sm_train_batch_size, drop_last=True)
+        self.sm_test_sampler = BatchSampler(RandomSampler(self.sm_test_ds, generator=g), batch_size=self.sm_test_batch_size, drop_last=True)
+        self.st_sampler = BatchSampler(RandomSampler(self.st_ds, generator=g), batch_size=self.st_batch_size, drop_last=True)
+    
+    def train_st(self, sm_data, st_data, rec_w=1, m_w=1):
+        self.model.train()
+        self.st_optimizer.zero_grad()
+        sm_latent, sm_predictions, sm_rec_data = self.model(sm_data)
+        st_latent, _, st_rec_data = self.model(st_data)
+        sm_rec_loss = self.kl_rec_loss_func(sm_data, sm_rec_data).mean() - self.cosine_rec_loss_func(sm_data, sm_rec_data).mean()
+        st_rec_loss = self.kl_rec_loss_func(st_data, st_rec_data).mean() - self.cosine_rec_loss_func(st_data, st_rec_data).mean()
+        mmd_loss = self.mmd_loss(sm_latent, st_latent)
+        loss = rec_w*sm_rec_loss + rec_w*st_rec_loss + m_w*mmd_loss
+        loss.backward()
+        self.st_optimizer.step()
+        return loss, sm_rec_loss, st_rec_loss, mmd_loss
 
-        self.sm_train_rec_loss = tf.keras.metrics.Mean(name='sm_train_rec_loss')
-        self.sm_train_infer_loss = tf.keras.metrics.Mean(name='sm_train_infer_loss')
-        self.sm_train_loss = tf.keras.metrics.Mean(name='sm_train_loss')
-        self.sm_test_rec_loss = tf.keras.metrics.Mean(name='sm_test_rec_loss')
-        self.sm_test_infer_loss = tf.keras.metrics.Mean(name='sm_test_infer_loss')
-        self.sm_test_loss = tf.keras.metrics.Mean(name='sm_test_loss')
-        self.st_train_rec_loss = tf.keras.metrics.Mean(name='st_train_rec_loss')
-        self.st_test_rec_loss = tf.keras.metrics.Mean(name='st_test_rec_loss')
-        self.disc_train_loss = tf.keras.metrics.Mean(name='disc_train_loss')
-        self.disc_test_loss = tf.keras.metrics.Mean(name='disc_test_loss')
-        return BaseModel(input_dims,latent_dims,hidden_dims,celltype_dims,ae_hidden_layers,disc_hidden_layers,pred_hidden_layers,always_batch_norm)
-    
-    def build_dataset(self,st_data,sm_data,sm_labels):
-        x_train,y_train,x_test,y_test = data_utils.split_shuffle_data(np.array(sm_data,dtype=np.float32),np.array(sm_labels,dtype=np.float32))
-        train_ds = tf.data.Dataset.from_tensor_slices((x_train,y_train))
-        test_ds = tf.data.Dataset.from_tensor_slices((x_test,y_test))
-        st_ds = tf.data.Dataset.from_tensor_slices(np.array(st_data, dtype=np.float32))
-        return train_ds, test_ds, st_ds
-    
-    @tf.function
-    def train_sm(self, data, labels, d_loss, rec_w=1, infer_w=1, d_w=1):
-        with tf.GradientTape() as tape:
-            latent = self.model.encoder(data, training=True)
-            rec_data = self.model.decoder(latent, training=True)
-            predictions = self.model.pred(latent, training=True)
-            rec_loss = tf.reduce_mean(self.kl_rec_loss_func(data, rec_data)) + tf.reduce_mean(self.cosine_rec_loss_func(data,rec_data))
-            infer_loss = tf.reduce_mean(self.kl_infer_loss_func(labels,predictions)) + tf.reduce_mean(self.cosine_infer_loss_func(labels,predictions))
-            loss = rec_w*rec_loss + infer_w*infer_loss + d_w*d_loss
-        gradients = tape.gradient(loss, self.model.encoder.trainable_variables+self.model.decoder.trainable_variables+self.model.pred.trainable_variables)
-        self.sm_optimizer.apply_gradients(zip(gradients, self.model.encoder.trainable_variables+self.model.decoder.trainable_variables+self.model.pred.trainable_variables))
-        self.sm_train_rec_loss(rec_loss)
-        self.sm_train_infer_loss(infer_loss)
-        self.sm_train_loss(loss)
-        return latent
-
-    @tf.function
-    def train_st(self,data, d_loss,rec_w=1,d_w=1):
-        with tf.GradientTape() as tape:
-            latent = self.model.encoder(data, training=True)
-            rec_data = self.model.decoder(latent, training=True)
-            rec_loss = tf.reduce_mean(self.kl_rec_loss_func(data,rec_data)) + tf.reduce_mean(self.cosine_rec_loss_func(data,rec_data))
-            loss = tf.add(rec_w*rec_loss,d_w*d_loss)
-        gradients = tape.gradient(loss, self.model.encoder.trainable_variables+self.model.decoder.trainable_variables)
-        self.st_optimizer.apply_gradients(zip(gradients, self.model.encoder.trainable_variables+self.model.decoder.trainable_variables))
-        self.st_train_rec_loss(rec_loss)
-        return latent
-    
-    @tf.function
-    def train_disc(self,latent_1, latent_2):
-        with tf.GradientTape() as tape:
-            latent = tf.concat((latent_1,latent_2),axis=0)
-            labels = tf.concat((tf.ones(latent_1.shape[0]),tf.zeros(latent_2.shape[0])),axis=0)
-            pred_d = self.model.disc(latent, training=True)
-#             pred_d = tf.reshape(pred_d,[latent.shape[0]])
-            disc_loss = self.bce_loss_func(labels,pred_d)
-        gradients = tape.gradient(disc_loss, self.model.disc.trainable_variables)
-        self.disc_optimizer.apply_gradients(zip(gradients, self.model.disc.trainable_variables))
-        self.disc_train_loss(disc_loss)
-        return disc_loss
+    def train_sm(self, sm_data, sm_labels, infer_w=1):
+        self.model.train()
+        self.sm_optimizer.zero_grad()
+        sm_latent, sm_predictions, sm_rec_data = self.model(sm_data)
+        infer_loss = 0
+        for loss in self.infer_losses:
+            if loss == 'kl':
+                infer_loss += self.kl_infer_loss_func(sm_labels, sm_predictions).mean()
+            elif loss == 'cos':
+                infer_loss -= self.cosine_infer_loss_func(sm_labels, sm_predictions).mean()
+            elif loss == 'rmse':
+                infer_loss += self.rmse_loss_func(sm_labels, sm_predictions)
+        loss = infer_w*infer_loss
+        loss.backward()
+        self.sm_optimizer.step()
+        return loss, infer_loss
         
-    @tf.function
-    def test_sm(self,data, labels, rec_w=1, infer_w=1):
-        latent = self.model.encoder(data, training=False)
-        rec_data = self.model.decoder(latent, training=False)
-        predictions = self.model.pred(latent, training=False)
-        rec_loss = rec_w*tf.reduce_mean(self.kl_rec_loss_func(data,rec_data)) + tf.reduce_mean(self.cosine_rec_loss_func(data,rec_data))
-        infer_loss = infer_w*tf.reduce_mean(self.kl_infer_loss_func(labels,predictions)) + tf.reduce_mean(self.cosine_infer_loss_func(labels,predictions))
-        loss = rec_loss + infer_loss
-        self.sm_test_rec_loss(rec_loss)
-        self.sm_test_infer_loss(infer_loss)
-        self.sm_test_loss(loss)
-        return latent
+    def test_st(self, sm_data, st_data, rec_w=1, m_w=1):
+        self.model.eval()
+        sm_latent, sm_predictions, sm_rec_data = self.model(sm_data)
+        st_latent, _, st_rec_data = self.model(st_data)
+        sm_rec_loss = self.kl_rec_loss_func(sm_data, sm_rec_data).mean() - self.cosine_rec_loss_func(sm_data, sm_rec_data).mean()
+        st_rec_loss = self.kl_rec_loss_func(st_data, st_rec_data).mean() - self.cosine_rec_loss_func(st_data, st_rec_data).mean()
+        mmd_loss = self.mmd_loss(sm_latent, st_latent)
+        loss = rec_w*sm_rec_loss + rec_w*st_rec_loss + m_w*mmd_loss
+        return loss, sm_rec_loss, st_rec_loss, mmd_loss
         
-    @tf.function
-    def test_st(self,data, rec_w=1):
-        latent = self.model.encoder(data, training=False)
-        rec_data = self.model.decoder(latent, training=False)
-        rec_loss = rec_w*tf.reduce_mean(self.kl_rec_loss_func(data,rec_data)) + tf.reduce_mean(self.cosine_rec_loss_func(data,rec_data))
-        self.st_test_rec_loss(rec_loss)
-        return latent
-    
-    def test_disc(self,latent_1, latent_2):
-        latent = tf.concat((latent_1,latent_2),axis=0)
-        labels = tf.concat((tf.ones(latent_1.shape[0]),tf.zeros(latent_2.shape[0])),axis=0)
-        pred_d = self.model.disc(latent, training=False)
-        disc_loss = self.bce_loss_func(labels,pred_d)
-        self.disc_test_loss(disc_loss)
-        return disc_loss
-
-    @staticmethod
-    def add_noise(proportion,minval=-0.1,maxval=0.1):
-        return tf.clip_by_value(proportion + tf.random.uniform(shape=proportion.shape,minval=minval,maxval=maxval),0,1)
+    def test_sm(self, sm_data, sm_labels, infer_w=1):
+        self.model.eval()
+        sm_latent, sm_predictions, sm_rec_data = self.model(sm_data)
+        infer_loss = 0
+        for loss in self.infer_losses:
+            if loss == 'kl':
+                infer_loss += self.kl_infer_loss_func(sm_labels, sm_predictions).mean()
+            elif loss == 'cos':
+                infer_loss -= self.cosine_infer_loss_func(sm_labels, sm_predictions).mean()
+            elif loss == 'rmse':
+                infer_loss += self.rmse_loss_func(sm_labels, sm_predictions)
+        loss = infer_w*infer_loss
+        return loss, infer_loss
     
     def train_model_by_step(
         self,
-        max_steps=50000,
-        save_mode='best',
+        max_steps=5000,
+        save_mode='all',
         save_path=None,
         prefix=None,
-        sm_step=4,
-        st_step=1,
-        disc_step=1,
-        test_step_gap=10,
+        sm_step=10,
+        st_step=10,
+        test_step_gap=1,
         convergence=0.001,
         early_stop=True,
-        early_stop_max=20,
+        early_stop_max=2000,
         sm_lr=None,
         st_lr=None,
-        disc_lr=None,
-        batch_size=4096,
-        rec_w=0.5, 
+        rec_w=1, 
         infer_w=1,
-        d_w=1,
-        m_w=1000,
-        noise=None
+        m_w=1,
     ):
-        st_ds_size = self.st_ds.cardinality().numpy()
-        train_ds_size = self.train_ds.cardinality().numpy()
         if len(self.history) > 0:
             best_ind = np.where(self.history['is_best'] == 'True')[0][-1]
             best_loss = self.history['sm_test_infer_loss'][best_ind]
@@ -444,59 +356,48 @@ class SpointModel():
             best_loss = np.inf
             best_rec_loss = np.inf
         early_stop_count = 0
-        if save_path is None:
-            save_path = 'Spoint_models'
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
         if sm_lr is not None:
-            self.sm_optimizer.lr.assign(sm_lr)
+            for g in self.sm_optimizer.param_groups:
+                g['lr'] = sm_lr
         if st_lr is not None:
-            self.st_optimizer.lr.assign(st_lr)
-        if disc_lr is not None:
-            self.disc_optimizer.lr.assign(disc_lr)
-        
-        sm_shuffle_step = max(int(train_ds_size/(batch_size*sm_step)),1)
-        st_shuffle_step = max(int(st_ds_size/(batch_size*st_step)),1)
-        
-        d_loss = 0
-        
-        for step in range(max_steps):
-            if step % sm_shuffle_step == 0:
-                train_ds_iter = itertools.cycle(self.train_ds.shuffle(train_ds_size).batch(batch_size))
+            for g in self.st_optimizer.param_groups:
+                g['lr'] = st_lr
+
+        pbar = tqdm(range(max_steps))
+        sm_trainr_iter = itertools.cycle(self.sm_train_sampler)
+        sm_test_iter = itertools.cycle(self.sm_test_sampler)
+        st_iter = itertools.cycle(self.st_sampler)
+        sm_train_shuffle_step = max(int(len(self.sm_train_ds)/(self.sm_train_batch_size*sm_step)),1)
+        sm_test_shuffle_step = max(int(len(self.sm_test_ds)/(self.sm_test_batch_size*sm_step)),1)
+        st_shuffle_step = max(int(len(self.st_ds)/(self.st_batch_size*st_step)),1)
+        for step in pbar:
+            if step % sm_train_shuffle_step == 0:
+                sm_train_iter = itertools.cycle(self.sm_train_sampler)
+            if step % sm_test_shuffle_step == 0:
+                sm_test_iter = itertools.cycle(self.sm_test_sampler)
             if step % st_shuffle_step == 0:
-                st_ds_iter = itertools.cycle(self.st_ds.shuffle(st_ds_size).batch(batch_size))
-            self.sm_train_rec_loss.reset_states()
-            self.sm_train_infer_loss.reset_states()
-            self.sm_train_loss.reset_states()
-            self.sm_test_rec_loss.reset_states()
-            self.sm_test_infer_loss.reset_states()
-            self.sm_test_loss.reset_states()
-            self.st_train_rec_loss.reset_states()
-            self.st_test_rec_loss.reset_states()
-            self.disc_train_loss.reset_states()
-            self.disc_test_loss.reset_states()
-                
+                st_iter = itertools.cycle(self.st_sampler)
+
+            st_exp = self.st_ds[next(st_iter)][0]
+            sm_exp, sm_proportion = self.sm_train_ds[next(sm_train_iter)]
+            for i in range(st_step):
+                st_train_total_loss, sm_train_rec_loss, st_train_rec_loss, st_train_mmd_loss = self.train_st(sm_exp, st_exp, rec_w=rec_w, m_w=m_w)
+            for i in range(sm_step):
+                sm_train_total_loss, sm_train_infer_loss = self.train_sm(sm_exp, sm_proportion, infer_w=infer_w)
+            
             if step % test_step_gap == 0:
-                for exp in self.st_ds.batch(batch_size):
-                    st_latent = self.test_st(exp, rec_w=rec_w)
-                for exp, proportion in self.test_ds.batch(batch_size):
-                    sm_latent = self.test_sm(exp,proportion, rec_w=rec_w, infer_w=infer_w)
-                mmd_loss = compute_mmd(st_latent,sm_latent)*m_w
-                # for i in range(disc_step):
-                #     d_loss = self.test_disc(st_latent, sm_latent)
-                    
-                current_loss = self.sm_test_infer_loss.result()
-                current_rec_loss = self.st_test_rec_loss.result()
+                sm_test_exp, sm_test_proportion = self.sm_test_ds[next(sm_test_iter)]
+                st_test_total_loss, sm_test_rec_loss, st_test_rec_loss, st_test_mmd_loss = self.test_st(sm_test_exp, st_exp, rec_w=rec_w, m_w=m_w)
+                sm_test_total_loss, sm_test_infer_loss = self.test_sm(sm_test_exp, sm_test_proportion, infer_w=infer_w)
+                
+                current_infer_loss = sm_test_infer_loss.item()
 
                 best_flag='False'
-                # if (best_loss - current_loss > convergence) & (best_rec_loss - current_rec_loss > convergence):
-                if best_loss - current_loss > convergence:
-                    if best_loss > current_loss:
-                        best_loss = current_loss
-                    # if best_rec_loss > current_rec_loss:
-                    #     best_rec_loss = current_rec_loss
+                if best_loss - current_infer_loss > convergence:
+                    if best_loss > current_infer_loss:
+                        best_loss = current_infer_loss
                     best_flag='True'
-                    print('### Update best model')
+                    # print('### Update best model')
                     early_stop_count = 0
                     old_best_path = self.best_path
                     if prefix is not None:
@@ -507,80 +408,60 @@ class SpointModel():
                         if old_best_path is not None:
                             if os.path.exists(old_best_path):
                                 os.remove(old_best_path)
-                        self.model.save_weights(self.best_path)
+                        torch.save(self.model.state_dict(), self.best_path)
                 else:
                     early_stop_count += 1
+                    
                 if save_mode == 'all':
-                    if prefix != '':
+                    if prefix is not None:
                         self.best_path = os.path.join(save_path,prefix+'_'+f'celleagle_weights_step{step}.h5')
                     else:
-                        self.model.save_weights(os.path.join(save_path,f'celleagle_weights_step{step}.h5'))
-                self.history = self.history.append({
-                    'sm_train_rec_loss':self.sm_train_rec_loss.result(),
-                    'sm_train_infer_loss':self.sm_train_infer_loss.result(),
-                    'sm_train_loss':self.sm_train_loss.result(),
-                    'sm_test_rec_loss':self.sm_test_rec_loss.result(),
-                    'sm_test_infer_loss':self.sm_test_infer_loss.result(),
-                    'sm_test_loss':self.sm_test_loss.result(),
-                    'st_train_rec_loss':self.st_train_rec_loss.result(),
-                    'st_test_rec_loss':self.st_test_rec_loss.result(),
-                    'disc_train_rec_loss':self.disc_train_loss.result(),
-                    'disc_test_rec_loss':self.disc_test_loss.result(),
-                    'is_best':best_flag
-                }, ignore_index=True)
-                # print(
-                #     f'Step {step + 1}: sm_infer_loss:{self.sm_test_infer_loss.result():.3f}, sm_rec_loss: {self.sm_test_rec_loss.result():.3f}, st_rec_loss: {self.st_test_rec_loss.result():.3f}, disc_loss: {self.disc_test_loss.result():.3f}, mmd_loss: {mmd_loss:.3f}'
-                # )
-                print(
-                    f'Step {step + 1} - loss: {self.sm_test_infer_loss.result():.3f}'
-                )
+                        self.best_path = os.path.join(save_path,f'celleagle_weights_step{step}.h5')
+                    torch.save(self.model.state_dict(), self.best_path)
+                
+                self.history = pd.concat([
+                    self.history,
+                    pd.DataFrame({
+                        'sm_train_infer_loss':sm_train_infer_loss.item(),
+                        'sm_train_rec_loss':sm_train_infer_loss.item(),
+                        'sm_test_rec_loss':sm_test_rec_loss.item(),
+                        'sm_test_infer_loss':sm_test_infer_loss.item(),
+                        'st_train_rec_loss':st_train_rec_loss.item(),
+                        'st_test_rec_loss':st_test_rec_loss.item(),
+                        'st_train_mmd_loss':st_train_rec_loss.item(),
+                        'st_test_mmd_loss':st_test_rec_loss.item(),
+                        'is_best':best_flag
+                    },index=[0])
+                ]).reset_index(drop=True)
+
+                pbar.set_description(f"Step {step + 1}: Test inference loss={sm_test_infer_loss.item():.3f}",refresh=True)
+                
                 if (early_stop_count > early_stop_max) and early_stop:
                     print('Stop trainning because of loss convergence')
                     break
-            
-            for i in range(st_step):
-                exp = next(st_ds_iter)
-                st_latent = self.train_st(exp, mmd_loss, rec_w=rec_w, d_w=d_w)
-            for i in range(sm_step):
-                exp, proportion = next(train_ds_iter)
-                sm_latent = self.train_sm(exp, proportion, mmd_loss, rec_w=rec_w, infer_w=infer_w, d_w=d_w)
-            mmd_loss = compute_mmd(st_latent,sm_latent)*m_w
-            # for i in range(disc_step):
-            #     d_loss = self.train_disc(st_latent, sm_latent)
-            
-    def train(
+    
+    def train_model(
         self,
-        max_steps=50000,
-        save_mode='best',
+        max_steps=5000,
+        save_mode='all',
         save_path=None,
         prefix=None,
-        sm_step=4,
-        st_step=1,
-        disc_step=1,
-        test_step_gap=10,
+        sm_step=10,
+        st_step=10,
+        test_step_gap=1,
         convergence=0.001,
-        early_stop=True,
-        early_stop_max=20,
+        early_stop=False,
+        early_stop_max=2000,
         sm_lr=None,
         st_lr=None,
-        disc_lr=None,
-        batch_size=4096,
-        rec_w=0.5, 
+        batch_size=1024,
+        rec_w=1, 
         infer_w=1,
-        d_w=1,
-        m_w=1000,
-        noise=None,
-        scvi_layers=2,
-        scvi_latent=64,
-        scvi_gene_likelihood='zinb',
-        scvi_dispersion='gene-batch',
-        scvi_max_epochs=100,
-        scvi_early_stopping=True,
-        scvi_batch_size=4096,
+        m_w=1,
     ):
         """Training Spoint model.
         
-        Obtain latent feature from scVI then feed in Spoint model for training until loss convengence.
+        Training Spoint model.
 
         Args:
             max_steps: The max step of training. The training process will be stop when achive max step.
@@ -596,25 +477,12 @@ class SpointModel():
             batch_size: Batch size of the data be feeded in model once.
             rec_w: The weight of reconstruction loss.
             infer_w: The weig ht of inference loss.
-            d_w: The weight of discrimination loss.
-            m_w=1000: The weight of MMD loss.
-            scvi_max_epochs: The max epoch of scVI.
-            scvi_batch_size: The batch size of scVI.
+            m_w: The weight of MMD loss.
         
         Returns:
             ``None``
         """
-
-        self.get_scvi_latent(
-            n_layers=scvi_layers,
-            n_latent=scvi_latent,
-            gene_likelihood=scvi_gene_likelihood,
-            dispersion=scvi_dispersion,
-            max_epochs=scvi_max_epochs,
-            early_stopping=scvi_early_stopping,
-            batch_size=scvi_batch_size,
-        )
-        self.train_ds, self.test_ds, self.st_ds = self.build_dataset(self.st_data,self.sm_data,self.sm_labels)
+        self.init_model()
         self.train_model_by_step(
             max_steps=max_steps,
             save_mode=save_mode,
@@ -622,18 +490,83 @@ class SpointModel():
             prefix=prefix,
             sm_step=sm_step,
             st_step=st_step,
-            disc_step=disc_step,
             test_step_gap=test_step_gap,
             convergence=convergence,
             early_stop=early_stop,
             early_stop_max=early_stop_max,
             sm_lr=sm_lr,
             st_lr=st_lr,
-            disc_lr=disc_lr,
-            batch_size=batch_size,
             rec_w=rec_w, 
             infer_w=infer_w,
-            d_w=d_w,
+            m_w=m_w
+        )
+                        
+    def train(
+        self,
+        max_steps=5000,
+        save_mode='all',
+        save_path=None,
+        prefix=None,
+        sm_step=10,
+        st_step=10,
+        test_step_gap=1,
+        convergence=0.001,
+        early_stop=False,
+        early_stop_max=2000,
+        sm_lr=None,
+        st_lr=None,
+        batch_size=1024,
+        rec_w=1, 
+        infer_w=1,
+        m_w=1,
+        scvi_max_epochs=100,
+        scvi_early_stopping=True,
+        scvi_batch_size=4096,
+    ):
+        """Training Spoint model.
+        
+        Obtain latent feature from scVI then feed in Spoint model for training.
+
+        Args:
+            max_steps: The max step of training. The training process will be stop when achive max step.
+            save_mode: A string determinates how the model is saved. It must be one of 'best' and 'all'.
+            save_path: A string representing the path directory where the model is saved.
+            prefix: A string added to the prefix of file name of saved model.
+            convergence: The threshold of early stop.
+            early_stop: If True, turn on early stop.
+            early_stop_max: The max steps of loss difference less than convergence.
+            sm_lr: Learning rate for simulated data.
+            st_lr: Learning rate for spatial transcriptomic data.
+            batch_size: Batch size of the data be feeded in model once.
+            rec_w: The weight of reconstruction loss.
+            infer_w: The weig ht of inference loss.
+            m_w: The weight of MMD loss.
+            scvi_max_epochs: The max epoch of scVI.
+            scvi_batch_size: The batch size of scVI.
+        Returns:
+            ``None``
+        """
+        if save_path is None:
+            save_path = os.path.join(tempfile.gettempdir() ,'Spoint_models_'+strftime("%Y%m%d%H%M%S",localtime()))
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        self.get_scvi_latent(max_epochs=scvi_max_epochs, early_stopping=scvi_early_stopping, batch_size=scvi_batch_size)
+        self.build_dataset(batch_size)
+        self.train_model(
+            max_steps=max_steps,
+            save_mode=save_mode,
+            save_path=save_path,
+            prefix=prefix,
+            sm_step=sm_step,
+            st_step=st_step,
+            test_step_gap=test_step_gap,
+            convergence=convergence,
+            early_stop=early_stop,
+            early_stop_max=early_stop_max,
+            sm_lr=sm_lr,
+            st_lr=st_lr,
+            rec_w=rec_w, 
+            infer_w=infer_w,
             m_w=m_w
         )
     
@@ -657,20 +590,17 @@ class SpointModel():
             metric_name = 'SSIM'
             func = metrics.ssim
         
-        # call model first before load weights
-        self.model(self.st_data, training=False)
-        
         if model_path is not None:
-            self.model.load_weights(model_path)
+            self.model.load_state_dict(torch.load(model_path))
         elif use_best_model:
-            self.model.load_weights(self.best_path)
+            self.model.load_state_dict(torch.load(self.best_path))
+        model.eval()
         pre = []
         prop = []
-        for exp_batch, prop_batch in self.test_ds.batch(batch_size):
-            latent_tmp = self.model.encoder(exp_batch, training=False)
-            pre_tmp = self.model.pred(latent_tmp, training=False).numpy()
-            pre.extend(pre_tmp)
-            prop.extend(prop_batch.numpy())
+        for exp_batch, prop_batch in self.sm_test_dataloader:
+            latent_tmp, pre_tmp, _ = self.model(exp_batch)
+            pre.extend(pre_tmp.cpu().detach().numpy())
+            prop.extend(prop_batch.cpu().detach().numpy())
         pre = np.array(pre)
         prop = np.array(prop)
         metric_list = []
@@ -718,14 +648,15 @@ class SpointModel():
         """
         if st_data is None:
             st_data = self.st_data
-        # st_data_norm = data_utils.normalize_mtx(st_data,target_sum=1e4)
-        self.model(st_data, training=False)
+        st_data = torch.tensor(st_data).to(self.device)
         if model_path is not None:
-            self.model.load_weights(model_path)
+            self.model.load_state_dict(torch.load(model_path))
         elif use_best_model:
-            self.model.load_weights(self.best_path)
-        latent = self.model.encoder(st_data, training=False)
-        pre = self.model.pred(latent, training=False).numpy()
+            self.model.load_state_dict(torch.load(self.best_path))
+        self.model.to(self.device)
+        self.model.eval()
+        latent, pre, _ = self.model(st_data)
+        pre = pre.cpu().detach().numpy()
         pre[pre < min_prop] = 0
         pre = pd.DataFrame(pre,columns=self.clusters,index=self.st_ad.obs_names)
         self.st_ad.obs[pre.columns] = pre.values

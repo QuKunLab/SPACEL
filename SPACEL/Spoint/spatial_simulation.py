@@ -3,6 +3,7 @@ import pandas as pd
 import numba as nb
 from numba import jit
 import collections
+import random
 from .data_downsample import downsample_cell,downsample_matrix_by_cell
 from .data_augmentation import random_augment,random_augmentation_cell
 import logging
@@ -25,6 +26,12 @@ def count_cell_counts(cell_counts):
             counts_df_filtered = counts_df.iloc[:i+1,:]
             break
     return counts_df_filtered
+
+
+@nb.njit
+def numba_set_seed(seed):
+    np.random.seed(seed)
+    random.seed(seed)
 
 # 对某个axis调用numpy函数(numba版本)
 @nb.njit
@@ -62,7 +69,33 @@ def sample_cell(param_list,cluster_p,clusters,cluster_id,sample_exp,sample_clust
         num_cell = params[0]
         num_cluster = params[1]
         used_clusters = clusters[np.searchsorted(np.cumsum(cluster_p), np.random.rand(num_cluster), side="right")]
-        cluster_mask=np.array([False]*len(cluster_id))
+        cluster_mask = np.array([False]*len(cluster_id))
+        for c in used_clusters:
+            cluster_mask = (cluster_id==c)|(cluster_mask)
+        # print('cluster_mask',cluster_mask)
+        # print('used_clusters',used_clusters)
+        used_cell_ind = np.where(cluster_mask)[0]
+        used_cell_p = cell_p_balanced[cluster_mask]
+        used_cell_p = used_cell_p/used_cell_p.sum()
+        sampled_cells = used_cell_ind[np.searchsorted(np.cumsum(used_cell_p), np.random.rand(num_cell), side="right")]
+        combined_exp = np_sum(sample_exp[sampled_cells,:],axis=0).astype(np.float32)
+        if data_augmentation:
+            combined_exp = random_augmentation_cell(combined_exp,max_rate=max_rate,max_val=max_val,kth=kth)
+        if downsample_fraction is not None:
+            combined_exp = downsample_cell(combined_exp, downsample_fraction)
+        combined_clusters = np_sum(sample_cluster[cluster_id[sampled_cells]],axis=0).astype(np.float32)
+        exp[i,:] = combined_exp
+        density[i,:] = combined_clusters
+    return exp,density
+
+@jit(nopython=True,parallel=True)
+def sample_cell_from_clusters(cluster_sample_list,ncell_sample_list,cluster_id,sample_exp,sample_cluster,cell_p_balanced,downsample_fraction=None,data_augmentation=True,max_rate=0.8,max_val=0.8,kth=0.2):
+    exp = np.empty((len(cluster_sample_list), sample_exp.shape[1]),dtype=np.float32)
+    density = np.empty((len(cluster_sample_list), sample_cluster.shape[1]),dtype=np.float32)
+    for i in nb.prange(len(cluster_sample_list)):
+        used_clusters = np.where(cluster_sample_list[i] == 1)[0]
+        num_cell = ncell_sample_list[i]
+        cluster_mask = np.array([False]*len(cluster_id))
         for c in used_clusters:
             cluster_mask = (cluster_id==c)|(cluster_mask)
         used_cell_ind = np.where(cluster_mask)[0]
@@ -129,16 +162,19 @@ def get_param_from_cell_counts(
     num_sample,
     cell_counts,
     cluster_sample_mode='gaussian',
+    cells_min=None,cells_max=None,
+    cells_mean=None,cells_std=None,
     clusters_mean=None,clusters_std=None,
     clusters_min=None,clusters_max=None
 ):
+    cell_count = np.asarray(np.ceil(np.clip(np.random.normal(cells_mean,cells_std,size=num_sample),int(cells_min),int(cells_max))),dtype=int)
     if cluster_sample_mode == 'gaussian':
-        cluster_count = np.asarray(np.ceil(np.clip(np.random.normal(clusters_mean,clusters_std,size=num_sample),1,cell_counts)),dtype=int)
+        cluster_count = np.asarray(np.ceil(np.clip(np.random.normal(clusters_mean,clusters_std,size=num_sample),1,cell_count)),dtype=int)
     elif cluster_sample_mode == 'uniform':
-        cluster_count = np.asarray(np.ceil(np.clip(np.random.uniform(clusters_min,clusters_max,size=num_sample),1,cell_counts)),dtype=int)
+        cluster_count = np.asarray(np.ceil(np.clip(np.random.uniform(clusters_min,clusters_max,size=num_sample),1,cell_count)),dtype=int)
     else:
         raise TypeError('Not correct sample method.')
-    return cell_counts,cluster_count
+    return cell_count,cluster_count
 
 # 获取每个cluster的采样概率
 def get_cluster_sample_prob(sc_ad,mode):
@@ -180,62 +216,75 @@ def generate_simulation_data(
     cells_mean=10,cells_std=5,
     clusters_mean=None,clusters_std=None,
     clusters_min=None,clusters_max=None,
+    cell_sample_counts=None,cluster_sample_counts=None,
+    ncell_sample_list=None,
+    cluster_sample_list=None,
     n_cpus=None
 ):
     if not 'cluster_p_unbalance' in sc_ad.uns:
         sc_ad = init_sample_prob(sc_ad,celltype_key)
     num_sample_per_mode = num_sample//len(balance_mode)
     cluster_ordered = np.array(sc_ad.obs['celltype_num'].value_counts().index)
-#     print(cluster_ordered)
     cluster_num = len(cluster_ordered)
-#     print(cluster_num)
     cluster_id = sc_ad.obs['celltype_num'].values
-#     print(cluster_id)
     cluster_mask = np.eye(cluster_num)
-#     print(cluster_mask)
-    
-    if cell_counts is not None:
-        cells_mean = np.mean(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)])
-        cells_std = np.std(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)])
-        cells_min = int(np.min(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)]))
-        cells_max = int(np.max(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)]))
-    if clusters_mean is None:
-        clusters_mean = cells_mean/2
-    if clusters_std is None:
-        clusters_std = cells_std/2
-    if clusters_min is None:
-        clusters_min = cells_min
-    if clusters_max is None:
-        clusters_max = np.min((cells_max//2,cluster_num))
-            
-    if cell_counts is not None:
-        cell_counts, cluster_count = get_param_from_cell_counts(num_sample_per_mode,cell_counts,cluster_sample_method,cells_mean=cells_mean,cells_std=cells_std,cells_max=cells_max,cells_min=cells_min,clusters_mean=clusters_mean,clusters_std=clusters_std,clusters_min=clusters_min,clusters_max=clusters_max)
-    elif cell_sample_method == 'gaussian':
-        cell_counts, cluster_count = get_param_from_gaussian(num_sample_per_mode,cells_mean=cells_mean,cells_std=cells_std,cells_max=cells_max,cells_min=cells_min,clusters_mean=clusters_mean,clusters_std=clusters_std)
-    elif cell_sample_method == 'uniform':
-        cell_counts, cluster_count = get_param_from_uniform(num_sample_per_mode,cells_max=cells_max,cells_min=cells_min,clusters_min=clusters_min,clusters_max=clusters_max)
-    else:
-        raise TypeError('Not correct sample method.')
-    params = np.array(list(zip(cell_counts, cluster_count)))
+    if (cell_sample_counts is None) or (cluster_sample_counts is None):
+        if cell_counts is not None:
+            cells_mean = np.mean(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)])
+            cells_std = np.std(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)])
+            cells_min = int(np.min(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)]))
+            cells_max = int(np.max(np.sort(cell_counts)[int(len(cell_counts)*0.05):int(len(cell_counts)*0.95)]))
+        if clusters_mean is None:
+            clusters_mean = cells_mean/2
+        if clusters_std is None:
+            clusters_std = cells_std/2
+        if clusters_min is None:
+            clusters_min = cells_min
+        if clusters_max is None:
+            clusters_max = np.min((cells_max//2,cluster_num))
 
-    sample_data_list = []
-    sample_labels_list = []
-    for b in balance_mode:
-        print(f'### Genetating simulated spatial data using scRNA data with mode: {b}')
-        cluster_p = get_cluster_sample_prob(sc_ad,b)
-        if downsample_fraction is not None:
-            if downsample_fraction > 0.035:
-                sample_data,sample_labels = sample_cell(
-                    param_list=params,
-                    cluster_p=cluster_p,
-                    clusters=cluster_ordered,
-                    cluster_id=cluster_id,
-                    sample_exp=generate_sample_array(sc_ad,used_genes),
-                    sample_cluster=cluster_mask,
-                    cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
-                    downsample_fraction=downsample_fraction,
-                    data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
-                )
+        if cell_counts is not None:
+            cell_sample_counts, cluster_sample_counts = get_param_from_cell_counts(num_sample_per_mode,cell_counts,cluster_sample_method,cells_mean=cells_mean,cells_std=cells_std,cells_max=cells_max,cells_min=cells_min,clusters_mean=clusters_mean,clusters_std=clusters_std,clusters_min=clusters_min,clusters_max=clusters_max)
+        elif cell_sample_method == 'gaussian':
+            cell_sample_counts, cluster_sample_counts = get_param_from_gaussian(num_sample_per_mode,cells_mean=cells_mean,cells_std=cells_std,cells_max=cells_max,cells_min=cells_min,clusters_mean=clusters_mean,clusters_std=clusters_std)
+        elif cell_sample_method == 'uniform':
+            cell_sample_counts, cluster_sample_counts = get_param_from_uniform(num_sample_per_mode,cells_max=cells_max,cells_min=cells_min,clusters_min=clusters_min,clusters_max=clusters_max)
+        else:
+            raise TypeError('Not correct sample method.')
+    if cluster_sample_list is None or ncell_sample_list is None:
+        params = np.array(list(zip(cell_sample_counts, cluster_sample_counts)))
+
+        sample_data_list = []
+        sample_labels_list = []
+        for b in balance_mode:
+            print(f'### Genetating simulated spatial data using scRNA data with mode: {b}')
+            cluster_p = get_cluster_sample_prob(sc_ad,b)
+            if downsample_fraction is not None:
+                if downsample_fraction > 0.035:
+                    sample_data,sample_labels = sample_cell(
+                        param_list=params,
+                        cluster_p=cluster_p,
+                        clusters=cluster_ordered,
+                        cluster_id=cluster_id,
+                        sample_exp=generate_sample_array(sc_ad,used_genes),
+                        sample_cluster=cluster_mask,
+                        cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
+                        downsample_fraction=downsample_fraction,
+                        data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
+                    )
+                else:
+                    sample_data,sample_labels = sample_cell(
+                        param_list=params,
+                        cluster_p=cluster_p,
+                        clusters=cluster_ordered,
+                        cluster_id=cluster_id,
+                        sample_exp=generate_sample_array(sc_ad,used_genes),
+                        sample_cluster=cluster_mask,
+                        cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
+                        data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
+                    )
+                    # logging.warning('### Downsample data with python backend')
+                    sample_data = downsample_matrix_by_cell(sample_data, downsample_fraction, n_cpus=n_cpus, numba_end=False)
             else:
                 sample_data,sample_labels = sample_cell(
                     param_list=params,
@@ -247,23 +296,52 @@ def generate_simulation_data(
                     cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
                     data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
                 )
-                # logging.warning('### Downsample data with python backend')
-                sample_data = downsample_matrix_by_cell(sample_data, downsample_fraction, n_cpus=n_cpus, numba_end=False)
-        else:
-            sample_data,sample_labels = sample_cell(
-                param_list=params,
-                cluster_p=cluster_p,
-                clusters=cluster_ordered,
-                cluster_id=cluster_id,
-                sample_exp=generate_sample_array(sc_ad,used_genes),
-                sample_cluster=cluster_mask,
-                cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
-                data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
-            )
-#         if data_augmentation:
-#             sample_data = random_augment(sample_data)
-        sample_data_list.append(sample_data)
-        sample_labels_list.append(sample_labels)
+    #         if data_augmentation:
+    #             sample_data = random_augment(sample_data)
+            sample_data_list.append(sample_data)
+            sample_labels_list.append(sample_labels)
+    else:
+        sample_data_list = []
+        sample_labels_list = []
+        for b in balance_mode:
+            print(f'### Genetating simulated spatial data using scRNA data with mode: {b}')
+            cluster_p = get_cluster_sample_prob(sc_ad,b)
+            if downsample_fraction is not None:
+                if downsample_fraction > 0.035:
+                    sample_data,sample_labels = sample_cell_from_clusters(
+                        cluster_sample_list=cluster_sample_list,
+                        ncell_sample_list=ncell_sample_list,
+                        cluster_id=cluster_id,
+                        sample_exp=generate_sample_array(sc_ad,used_genes),
+                        sample_cluster=cluster_mask,
+                        cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
+                        downsample_fraction=downsample_fraction,
+                        data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
+                    )
+                else:
+                    sample_data,sample_labels = sample_cell_from_clusters(
+                        cluster_sample_list=cluster_sample_list,
+                        ncell_sample_list=ncell_sample_list,
+                        cluster_id=cluster_id,
+                        sample_exp=generate_sample_array(sc_ad,used_genes),
+                        sample_cluster=cluster_mask,
+                        cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
+                        data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
+                    )
+                    # logging.warning('### Downsample data with python backend')
+                    sample_data = downsample_matrix_by_cell(sample_data, downsample_fraction, n_cpus=n_cpus, numba_end=False)
+            else:
+                sample_data,sample_labels = sample_cell_from_clusters(
+                    cluster_sample_list=cluster_sample_list,
+                    ncell_sample_list=ncell_sample_list,
+                    cluster_id=cluster_id,
+                    sample_exp=generate_sample_array(sc_ad,used_genes),
+                    sample_cluster=cluster_mask,
+                    cell_p_balanced=sc_ad.obs['cell_p_balanced'].values,
+                    data_augmentation=data_augmentation,max_rate=max_rate,max_val=max_val,kth=kth,
+                )
+            sample_data_list.append(sample_data)
+            sample_labels_list.append(sample_labels)
     return np.concatenate(sample_data_list), np.concatenate(sample_labels_list)
 
 @jit(nopython=True,parallel=True)

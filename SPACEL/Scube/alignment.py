@@ -131,8 +131,8 @@ def align(
     output_path=None,
     raw_loc_key='spatial',
     aligned_loc_key='spatial_aligned',
-    n_neighbors=5,
-    knn_exclude_cutoff=1,
+    n_neighbors=15,
+    knn_exclude_cutoff=None,
     p=2,
     a=1,
     bound_alpha=1,
@@ -150,10 +150,10 @@ def align(
         ad_list: A list containing all slice data in AnnData object.
         cluster_key: A string representing one column of ``obs`` in AnnData object, containing the spatial domain information used for alignment.
         output_path: A string representing the path directory where the alignment parameters are saved. If ``None``, it will be 'Scube_outputs'.
-        raw_loc_key: A string representing one key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the raw coordinates.
-        aligned_loc_key: A string written to a key of ``obsm`` in AnnData object of each slices in ``ad_list``, containing the aligned coordinates.
+        raw_loc_key: A string representing one key of ``obsm`` in AnnData object of each slice in ``ad_list``, containing the raw coordinates.
+        aligned_loc_key: A string written to a key of ``obsm`` in AnnData object of each slice in ``ad_list``, containing the aligned coordinates.
         n_neighbors: A number of neighbors in target slices considered by each spot/cell in source slices.
-        knn_exclude_cutoff: A number used to filter the neighbors in KNN. The neighbor will be exclude when the distance of neighbors larger than the median of neareast ``n_neighbors + knn_exclude_cutoff`` neighbors distance in all spot/cell in target slice.
+        knn_exclude_cutoff: A number used to filter the neighbors in MNN. The neighbor will be exclude when the distance of neighbors larger than the median of neareast ``n_neighbors + knn_exclude_cutoff`` neighbors distance in all spots/cells in target slice. If ``None``, it will automatically default to ``n_neighbors``.
         p: Degree of the penalty function.
         a: Coefficient of the penalty function.
         bound_alpha: For the optimized boundary, the multiplier based on the maximum and minimum values of the slice coordinates.
@@ -178,6 +178,9 @@ def align(
         raw_loc = np.asarray(ad_list[i].obsm[raw_loc_key], dtype=np.float32)
         raw_loc[:,:2] = raw_loc[:,:2] - np.median(raw_loc[:,:2],axis=0)
         ad_list[i].obsm['spatial_pair'] = raw_loc
+        
+    if knn_exclude_cutoff is None:
+        knn_exclude_cutoff = n_neighbors
     
     start = time.time()
     print('Start alignment...')

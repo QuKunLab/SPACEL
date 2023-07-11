@@ -113,8 +113,8 @@ def check_data_type(ad):
         ad.X =ad.X.astype(np.float32)
     return ad
 
-def generate_sm_adata(sc_ad,num_sample,celltype_key,n_threads):
-    sm_data,sm_labels = spatial_simulation.generate_simulation_data(sc_ad,num_sample=num_sample,celltype_key=celltype_key,downsample_fraction=None,data_augmentation=False,n_cpus=n_threads)
+def generate_sm_adata(sc_ad,num_sample,celltype_key,n_threads,cell_counts,clusters_mean,cells_mean,cells_min,cells_max,cell_sample_counts,cluster_sample_counts,ncell_sample_list,cluster_sample_list):
+    sm_data,sm_labels = spatial_simulation.generate_simulation_data(sc_ad,num_sample=num_sample,celltype_key=celltype_key,downsample_fraction=None,data_augmentation=False,n_cpus=n_threads,cell_counts=cell_counts,clusters_mean=clusters_mean,cells_mean=cells_mean,cells_min=cells_min,cells_max=cells_max,cell_sample_counts=cell_sample_counts,cluster_sample_counts=cluster_sample_counts,ncell_sample_list=ncell_sample_list,cluster_sample_list=cluster_sample_list)
     sm_data_mtx = csr_matrix(sm_data)
     sm_ad = anndata.AnnData(sm_data_mtx)
     sm_ad.var.index = sc_ad.var_names

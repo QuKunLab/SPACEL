@@ -4,7 +4,7 @@ from . import data_downsample
 from . import data_augmentation
 from . import spatial_simulation
 import numpy as np
-import tensorflow as tf
+import torch
 from scipy.sparse import csr_matrix
 import numba
 import logging
@@ -24,21 +24,32 @@ def init_model(
     deg_method:str='wilcoxon',
     n_top_markers:int=200,
     n_top_hvg:int=None,
-    log2fc_min=0.5, 
-    pval_cutoff=0.01, 
+    log2fc_min=0.5,
+    pval_cutoff=0.01,
     pct_diff=None, 
     pct_min=0.1,
+    use_rep='scvi',
     st_batch_key=None,
     sm_size:int=500000,
-    downsample=False,
-    downsample_fraction=None,
-    data_aug=True,
-    max_rate=0.8,max_val=0.8,kth=0.2,
-    hiddem_dims=512,
+    cell_counts=None,
+    clusters_mean=None,
+    cells_mean=10,
+    cells_min=1,
+    cells_max=20,
+    cell_sample_counts=None,
+    cluster_sample_counts=None,
+    ncell_sample_list=None,
+    cluster_sample_list=None,
+    scvi_layers=2,
+    scvi_latent=128,
+    scvi_gene_likelihood='zinb',
+    scvi_dispersion='gene-batch',
+    latent_dims=128, 
+    hidden_dims=512,
+    infer_losses=['kl','cos'],
     n_threads=4,
-    always_batch_norm=False,
-    rec_loss_axis=0,
-    seed=42
+    seed=42,
+    use_gpu=None
 ):
     """Initialize Spoint model.
     
@@ -69,12 +80,12 @@ def init_model(
     print('Setting global seed:', seed)
     random.seed(seed)
     np.random.seed(seed)
-    tf.random.set_seed(seed)
-    # Settings for dynamic allocation of gpu memory
-    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-    for gpu in gpus:
-        tf.config.experimental.set_memory_growth(gpu, True)
-    
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    spatial_simulation.numba_set_seed(seed)
     numba.set_num_threads(n_threads)
 
     sc_ad = data_utils.normalize_adata(sc_ad,target_sum=1e4)
@@ -94,8 +105,7 @@ def init_model(
         pct_diff=pct_diff, 
         pct_min=pct_min
     )
- 
-    sm_ad = data_utils.generate_sm_adata(sc_ad,num_sample=sm_size,celltype_key=celltype_key,n_threads=n_threads)
+    sm_ad = data_utils.generate_sm_adata(sc_ad,num_sample=sm_size,celltype_key=celltype_key,n_threads=n_threads,cell_counts=cell_counts,clusters_mean=clusters_mean,cells_mean=cells_mean,cells_min=cells_min,cells_max=cells_max,cell_sample_counts=cell_sample_counts,cluster_sample_counts=cluster_sample_counts,ncell_sample_list=ncell_sample_list,cluster_sample_list=cluster_sample_list)
     data_utils.downsample_sm_spot_counts(sm_ad,st_ad,n_threads=n_threads)
 
     model = base_model.SpointModel(
@@ -104,9 +114,16 @@ def init_model(
         clusters = np.array(sm_ad.obsm['label'].columns),
         spot_names = np.array(st_ad.obs_names),
         used_genes = np.array(st_ad.var_names),
+        use_rep=use_rep,
         st_batch_key=st_batch_key,
-        hidden_dims=hiddem_dims,
-        always_batch_norm=always_batch_norm,
-        rec_loss_axis=rec_loss_axis
+        scvi_layers=scvi_layers,
+        scvi_latent=scvi_latent,
+        scvi_gene_likelihood=scvi_gene_likelihood,
+        scvi_dispersion=scvi_dispersion,
+        latent_dims=latent_dims, 
+        hidden_dims=hidden_dims,
+        infer_losses=infer_losses,
+        use_gpu=use_gpu,
+        seed=seed
     )
     return model

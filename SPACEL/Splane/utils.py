@@ -1,10 +1,30 @@
-import tensorflow as tf
 import random
 import anndata
 import numpy as np
 from scipy.sparse import coo_matrix
 from sklearn.metrics import davies_bouldin_score
 
+def one_hot_encode(labels, unique_labels=None):
+    if unique_labels is None:
+        unique_labels = np.unique(labels)
+    num_classes = len(unique_labels)
+    label_map = {label: i for i, label in enumerate(unique_labels)}
+    encoded = np.eye(num_classes)[np.array([label_map[label] for label in labels])]
+    return encoded, unique_labels
+
+def add_cell_type_composition(ad, prop_df=None, celltype_anno=None, all_celltypes=None):
+    if prop_df is not None:
+        if all_celltypes is not None:
+            prop_df.loc[:,np.setdiff1d(all_celltypes, prop_df.columns)] = 0
+        ad.obs[prop_df.columns] = prop_df.values
+        ad.uns['celltypes'] = prop_df.columns
+    elif celltype_anno is not None:
+        encoded, unique_celltypes = one_hot_encode(celltype_anno, all_celltypes)
+        ad.obs[unique_celltypes] = encoded
+        ad.obs['celltypes'] = unique_celltypes
+    else:
+        raise ValueError("prop_df and celltype_anno can not both be None.")
+    
 # From scanpy
 def _morans_i_mtx(
     g_data: np.ndarray,
@@ -42,7 +62,7 @@ def _morans_i_vec_W(
 
     return len(x) / W * inum / z2ss
 
-def fill_low_prop(ad,min_prop=0.01):
+def fill_low_prop(ad,min_prop):
     mtx = ad.X
     mtx[mtx < min_prop] = 0
     ad.X = mtx
@@ -90,5 +110,5 @@ def split_ad(ad,by):
     for s in np.unique(ad.obs[by]):
         ad_split = ad[ad.obs[by] == s].copy()
         ad_list.append(ad_split)
-    return ad_split
+    return ad_list
 
