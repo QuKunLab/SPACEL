@@ -2,26 +2,28 @@
 
 ## Requirements
 
-To install `SPACEL`, you need install [TensorFlow](https://www.tensorflow.org/) with GPU version first. 
-- Create conda environment for `SPACEL`:
+To install `SPACEL`, you need to install [PyTorch](https://pytorch.org) with GPU support first. If you don't need GPU acceleration, you can just skip the installation for `cudnn` and `cudatoolkit`.
+* Create conda environment for `SPACEL`:
 ```
 conda env create -f environment.yml
 ```
 or
 ```
-conda create -n SPACEL -c conda-forge -c default cudnn=7.6 cudatoolkit=10.1 python=3.8 r-base r-fitdistrplus
+conda create -n SPACEL -c conda-forge -c default cudatoolkit=10.2 python=3.8 r-base r-fitdistrplus
 ```
-you can choose correct `tensorflow`, `cudnn` and `cudatoolkit` version dependent on your graphic driver version. If you don't need GPU acceleration, you can just skip the installation for `cudnn` and `cudatoolkit`.
-- Test if [TensorFlow](https://www.tensorflow.org/) for GPU available:
+You must choose correct `PyTorch`, `cudnn` and `cudatoolkit` version dependent on your graphic driver version. 
+* Test if [PyTorch](https://pytorch.org) for GPU available:
 ```
 python
->>> import tensorflow as tf
->>> tf.test.gpu_device_name()
+>>> import torch
+>>> torch.cuda.is_available()
 ```
-If these command line have not return available gpu names, please check your gpu driver version. For more detail, look at [CUDA Toolkit Major Component Versions](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-major-component-versions) and [TensorFlow Build Configurations](https://www.tensorflow.org/install/source#tested_build_configurations)
+If these command line have not return `True`, please check your gpu driver version and `cudatoolkit` version. For more detail, look at [CUDA Toolkit Major Component Versions](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-major-component-versions).
+
+Note: If you want to run 3D expression GPR model in Scube, you need to install the [Open3D](http://www.open3d.org/docs/release/) python library first.
 
 ## Installation
-- Install `SPACEL`:
+* Install `SPACEL`:
 ```
-pip install -r requirements.txt
-python setup.py install
+pip install SPACEL
+```

@@ -22,7 +22,7 @@
 .. autosummary::
    :toctree: generated/
 
-   Spoint.init_model
+   Spoint.model.init_model
    Spoint.base_model.SpointModel.train
    Spoint.base_model.SpointModel.deconv_spatial
 ```
@@ -41,9 +41,10 @@
 .. autosummary::
    :toctree: generated/
 
-   Splane.init_model
-   Splane.model.SplaneModel.train
-   Splane.model.SplaneModel.identify_spatial_domain
+   Splane.utils.add_cell_type_composition
+   Splane.model.init_model
+   Splane.base_model.SplaneModel.train
+   Splane.base_model.SplaneModel.identify_spatial_domain
 ```
 
 ## Scube: 

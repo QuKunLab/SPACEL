@@ -11,8 +11,8 @@ from SPACEL import Scube
 project = 'SPACEL'
 author = 'Hao Xu'
 
-release = '1.0'
-version = '1.0'
+release = '1.1.1'
+version = '1.1.1'
 
 # -- General configuration
 exclude_patterns = ['_build', '.DS_Store', '**.ipynb_checkpoints']
