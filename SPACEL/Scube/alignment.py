@@ -146,6 +146,7 @@ def align(
     """Pairwise alignment.
     
     Pairwise align the slices in ad_list. The aligned coordinates are saved in ``.obsm[aligned_loc_key]`` in each slices of ``ad_list``.
+    
     Args:
         ad_list: A list containing all slice data in AnnData object.
         cluster_key: A string representing one column of ``obs`` in AnnData object, containing the spatial domain information used for alignment.

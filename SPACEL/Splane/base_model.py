@@ -255,6 +255,9 @@ class SplaneModel():
         prefix=None
     ):
         """Training Splane model.
+
+        Training Splane model for identification of uniform spatial domains in multiple slics.
+
         Args:
             max_steps: The max step of training. The training process will be stop when achive max step.
             convergence: The total loss threshold for early stop.
@@ -265,6 +268,7 @@ class SplaneModel():
             plot_step: The interval steps of training.
             save_path: A string representing the path directory where the model is saved.
             prefix: A string added to the prefix of file name of saved model.
+
         Returns:
             ``None``
         """
@@ -314,7 +318,18 @@ class SplaneModel():
                     print('Stop trainning because of loss convergence')
                     break
     
-    def identify_spatial_domain(self,colors=None,key=None):
+    def identify_spatial_domain(self,key=None,colors=None):
+        """Identify Spaital domains.
+
+        Identification of uniform spatial domains in multiple slics.
+
+        Args:
+            key: A column name to be saved in  the `.obs` attribute of AnnData object of the ST data, representing the spatial domains. If not provided, the spatial domain will be saved as 'spatial_domain' in the `.obs` attribute.
+            colors: A list of colors assigned to each spatial domain.
+            
+        Returns:
+            ``None``
+        """
         if colors is None:
             if self.n_clusters > 10:
                 colors = [matplotlib.colors.to_hex(c) for c in sns.color_palette('tab20',n_colors=self.n_clusters)]
