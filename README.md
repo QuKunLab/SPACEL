@@ -21,7 +21,7 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 Read the [documentation](https://spacel.readthedocs.io) for more information.
 
 ## Latest updates
-### Version 1.1.0 2023-07-11
+### Version 1.1.1 2023-07-11
 #### Features
 * All code based on `Tensorflow` have been mirated to `PyTorch`, it does not have `Tensorflow` as dependency anymore.
 * The `Splane.utils.add_cell_type_composition` function has been implemented to facilitate the cell type composition predicted by deconvolution methods into Splane.
