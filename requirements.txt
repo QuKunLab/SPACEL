@@ -4,7 +4,6 @@ numba
 scikit-learn
 scanpy
 scvi-tools
-rpy2==3.3.*
 squidpy
 torch<=1.13
 scipy

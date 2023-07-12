@@ -22,6 +22,13 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 * {doc}`API <api>`
 
 ## Latest updates
+### Version 1.1.2 2023-07-12
+#### Fixed Bugs
+- Removed `rpy2` from the pypi dependency of SPACEL. It now needs to be pre-installed when creating the environment through conda.
+- Fixed a bug in Scube where the `best_model_state` was not referenced before being used.
+#### Features
+- Added function documentations for Scube related to the GPR model.
+
 ### Version 1.1.1 2023-07-11
 #### Features
 * All code based on `Tensorflow` have been mirated to `PyTorch`, it does not have `Tensorflow` as dependency anymore.

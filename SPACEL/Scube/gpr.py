@@ -24,8 +24,32 @@ class ExactGPModel(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 class GPRmodel():
+    """The GPR model class.
+
+    The GPR model class for prediction of 3D spatial transcriptomic data.
+
+    Attributes:
+        used_genes: A list of gene names used for selecting genes as input.
+        log_bf: The log Bayes factor (BF) value indicating the variation of each gene in 3D spatial data.
+        use_gpu: A boolean value indicating whether to use the GPU for training.
+        subset: An integer value indicating the number of spots/cells to be downsampled for training.
+        lengthscale_prior: The prior value of the lengthscale parameter in the Gaussian Process Regression (GPR) model.
+        outputscale_prior: The prior value of the outputscale parameter in the GPR model.
+        noise_prior: The prior value of the noise parameter in the GPR model.
+        output_dir: The path where the outputs will be saved.
+    """
+
     def __init__(self,expr,loc,loc_resample,used_genes,use_gpu=False,output_dir=None,**kwargs):
-        
+        """Initializes the instance of GPR model class.
+
+        Args:
+            expr: A matrix of expression values at each location in the spatial transcriptomic data.
+            loc: A matrix of coordinate values at each location in the spatial transcriptomic data.
+            loc_resample: A matrix of coordinate values at each location in the resampled data.
+            used_genes: A list of gene names used for selecting genes as input.
+            use_gpu: A boolean value indicating whether to use the GPU for training.
+            output_dir: The path where the outputs will be saved.
+        """
         if 'subset' not in kwargs.keys():
             self.subset = 10000
         else:
@@ -116,11 +140,6 @@ class GPRmodel():
         model.initialize(**hypers)
         model.train_targets = self.train_y
         model.zero_grad()
-        # print('outputscale: %.3f   lengthscale: %.3f   noise: %.3f' % (
-        #     model.covar_module.outputscale.item(),
-        #     model.covar_module.base_kernel.lengthscale.item(),
-        #     model.likelihood.noise.item()
-        # ))
     
     def train_single_model(self,model,lr=1,training_iter=500,save=False,save_path=None,optimize_method='Adam'):
         # Find optimal model hyperparameters
@@ -129,8 +148,8 @@ class GPRmodel():
         
         # "Loss" for GPs - the marginal log likelihood
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
-        best_loss=np.inf
-        
+        best_loss = None
+        best_model_state = None
         if optimize_method=='Adam':
             optimizer = torch.optim.Adam(model.parameters(),lr=lr)
             for i in range(training_iter):
@@ -139,14 +158,14 @@ class GPRmodel():
                 loss = -mll(output, self.train_y)
                 loss.backward()
                 optimizer.step()
-                # print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
-                #     i + 1, training_iter, loss.item(),
-                #     model.covar_module.base_kernel.lengthscale.item(),
-                #     model.likelihood.noise.item()
-                # ))
+                if best_loss is None:
+                    best_loss = loss.item()
+                if best_model_state is None:
+                    best_model_state = model.state_dict()
                 if loss.item() < best_loss:
                     best_model_state = model.state_dict()
                     best_loss = loss.item()
+
         # Bugs need to be solved
         elif optimize_method=='LBGFS':
             optimizer = torch.optim.LBFGS(model.parameters(),line_search_fn='strong_wolfe', lr=lr)
@@ -158,11 +177,10 @@ class GPRmodel():
                 return loss
             for i in range(training_iter):
                 loss = optimizer.step(closure)
-                # print('Iter %d/%d - Loss: %.3f   lengthscale: %.3f   noise: %.3f' % (
-                #     i + 1, training_iter, loss.item(),
-                #     model.covar_module.base_kernel.lengthscale.item(),
-                #     model.likelihood.noise.item()
-                # ))
+                if best_loss is None:
+                    best_loss = loss.item()
+                if best_model_state is None:
+                    best_model_state = model.state_dict()
                 if loss.item() < best_loss:
                     best_model_state = model.state_dict()
                     best_loss = loss.item()
@@ -172,8 +190,6 @@ class GPRmodel():
         # Get into evaluation (predictive posterior) mode
         model.eval()
         model.likelihood.eval()
-        # for param_name, param in model.named_parameters():
-        #     print(f'Parameter name: {param_name:42} value = {param.item()}')
         if save:
             torch.save(best_model_state, save_path)
         print('Best model loss:', best_loss)
@@ -207,10 +223,6 @@ class GPRmodel():
                 loss = optimizer.step(closure)
             else:
                 raise ValueError('Invalid optimize method: ', optimize_method)
-            # print(' - Lengthscale weight: %.3f   Loss: %.3f' % (
-            #     lenthscale_alpha,
-            #     loss.item(),
-            # ))
             loss_list.append(loss.item())
         best_l_alpha = l_range[np.argmin(loss_list)]
         print('Initialize lenthscale alpha as %.3f' % best_l_alpha)
@@ -219,6 +231,22 @@ class GPRmodel():
         model.likelihood.eval()
     
     def train(self,lr=1,training_iter=500,save_model=True,save_pred=False,cal_bf=False,optim_l=False,optimize_method='Adam'):
+        """Training GPR model
+    
+        Training GPR model. 
+        
+        Args:
+            lr: The learning rate used in the training process.
+            training_iter: The number of iterations for the training.
+            save_model: A boolean value indicating whether to save the trained model. The default value is True.
+            save_pred: A boolean value indicating whether to save the prediction results.
+            cal_bf: A boolean value indicating whether to calculate the BF (Bayes factor) value.
+            optim_l: A boolean value indicating whether to optimize the initial length scale value.
+            optimize_method: The optimization method used in the training. It must be one of 'Adam' and 'LBGFS'. By default, it is set to 'Adam'.
+
+        Returns:
+            ``None``
+        """
         for g,g_i in zip(self.used_genes,self.g_ind):
             print(f'Modeling {g}')
             self.train_y = self.subset_y[:,g_i]
@@ -302,6 +330,23 @@ class GPRmodel():
         return_expr=True,
         *args,**kwargs
     ):
+        """Plotting predicted expression values.
+    
+        Plotting the expression values predicted by the trained GPR model.
+        
+        Args:
+            gene: The name of the gene for prediction.
+            training_iter: The number of model iteration for prediction.
+            lr: The learning rate of the model for prediction.
+            data: The coordinate matrix for prediction.
+            save: A boolean value indicating whether to save the prediction figure.
+            save_path: The path where the outputs will be saved. The file extension must be one of the supported picture types.
+            save_dpi: The DPI (dots per inch) of the saved results.
+            return_expr: A boolean value indicating whether to return the prediction values.
+
+        Returns:
+            ``None`` or the prediction values.
+        """
         if data is None:
             data = self.loc_resample
         else:

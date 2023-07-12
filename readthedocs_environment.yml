@@ -3,10 +3,10 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cudnn=7.6.*
-  - cudatoolkit=10.1.*
+  - cudatoolkit=10.2.*
   - python=3.8
   - pip
+  - rpy2
   - r-base
   - r-fitdistrplus
   - pip: 

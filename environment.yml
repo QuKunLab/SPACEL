@@ -6,5 +6,6 @@ dependencies:
   - cudatoolkit=10.2.*
   - python=3.8
   - pip
+  - rpy2
   - r-base
   - r-fitdistrplus
