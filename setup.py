@@ -20,7 +20,6 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "pip",
-        "rpy2==3.3.*",
         "squidpy",
         "scvi-tools",
         "scipy",
