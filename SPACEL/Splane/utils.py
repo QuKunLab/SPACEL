@@ -34,7 +34,7 @@ def add_cell_type_composition(ad, prop_df=None, celltype_anno=None, all_celltype
     elif celltype_anno is not None:
         encoded, unique_celltypes = one_hot_encode(celltype_anno, all_celltypes)
         ad.obs[unique_celltypes] = encoded
-        ad.obs['celltypes'] = unique_celltypes
+        ad.uns['celltypes'] = unique_celltypes
     else:
         raise ValueError("prop_df and celltype_anno can not both be None.")
     
