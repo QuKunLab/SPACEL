@@ -109,8 +109,8 @@ class GPRmodel():
                     noise_prior=noise_prior
                 )
                 self.flat_model = ExactGPModel(self.train_x, self.train_y, likelihood, lengthscale_prior=lengthscale_prior,outputscale_prior=outputscale_prior)
-            # self.init_model(self.flat_model,lengthscale=torch.tensor(99999999))
-            self.init_model(self.flat_model,lengthscale=torch.inf)
+            # self.init_model(self.flat_model,lengthscale=torch.tensor(99999))
+            self.init_model(self.flat_model,lengthscale=torch.tensor(1000))
         else:
             if self.model is None:
                 likelihood = gpytorch.likelihoods.GaussianLikelihood(
@@ -148,8 +148,8 @@ class GPRmodel():
         
         # "Loss" for GPs - the marginal log likelihood
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
-        best_loss = None
-        best_model_state = None
+        best_loss = np.inf
+        best_model_state = model.state_dict()
         if optimize_method=='Adam':
             optimizer = torch.optim.Adam(model.parameters(),lr=lr)
             for i in range(training_iter):
@@ -158,10 +158,7 @@ class GPRmodel():
                 loss = -mll(output, self.train_y)
                 loss.backward()
                 optimizer.step()
-                if best_loss is None:
-                    best_loss = loss.item()
-                if best_model_state is None:
-                    best_model_state = model.state_dict()
+                print(loss.item())
                 if loss.item() < best_loss:
                     best_model_state = model.state_dict()
                     best_loss = loss.item()
@@ -177,10 +174,6 @@ class GPRmodel():
                 return loss
             for i in range(training_iter):
                 loss = optimizer.step(closure)
-                if best_loss is None:
-                    best_loss = loss.item()
-                if best_model_state is None:
-                    best_model_state = model.state_dict()
                 if loss.item() < best_loss:
                     best_model_state = model.state_dict()
                     best_loss = loss.item()
