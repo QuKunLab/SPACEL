@@ -1,11 +1,7 @@
-matplotlib
-seaborn
 numba
 scikit-learn
 scanpy
-scvi-tools
-squidpy
+scvi-tools<=0.20.3
+squidpy<1.3
 torch<=1.13
-scipy
 gpytorch
-torchmetrics

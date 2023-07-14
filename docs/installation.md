@@ -1,7 +1,7 @@
 # Installation
 
 ## Requirements
-
+**Note**: The current version of SPACEL only supports Linux and MacOS, not Windows platform.
 To install `SPACEL`, you need to install [PyTorch](https://pytorch.org) with GPU support first. If you don't need GPU acceleration, you can just skip the installation for `cudnn` and `cudatoolkit`.
 * Create conda environment for `SPACEL`:
 ```

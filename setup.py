@@ -20,16 +20,12 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "pip",
-        "squidpy",
-        "scvi-tools",
-        "scipy",
+        "squidpy<1.3",
+        "scvi-tools<=0.20.3",
         "scikit-learn",
-        "matplotlib",
-        "seaborn",
         "scanpy",
         "numba",
         "torch<=1.13",
         "gpytorch",
-        "torchmetrics",
     ],
 )
