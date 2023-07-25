@@ -13,10 +13,15 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 * [Requirements](#Requirements)
 * [Installation](#Installation)
 * Tutorials
-    * [Spoint tutorial: Deconvolution of cell types compostion on human brain Visium dataset](docs/tutorials/deconvolution_of_cell_types_distribution.ipynb)
-    * [Splane tutorial: Identify uniform spatial domain on human breast cancer Visium dataset](docs/tutorials/identification_of_uniform_spatial_domain.ipynb)
-    * [Scube tutorial: Alignment of consecutive ST slices on human brain MERFISH dataset](docs/tutorials/alignment_of_multiple_slices.ipynb)
-    * [Scube tutorial: 3D expression modeling with gaussian process regression](docs/tutorials/3D_expression_modeling.ipynb)
+    * [Spoint tutorial: Deconvolution of cell types compostion on human brain Visium dataset](docs/tutorials/Visium_human_DLPFC_Spoint.ipynb)
+    * [Splane tutorial: Identify uniform spatial domain on human breast cancer Visium dataset](docs/tutorials/Visium_human_breast_cancer_Splane.ipynb)
+    * [Splane&Scube tutorial (1/2): Identify uniform spatial domain on human brain MERFISH dataset](docs/tutorials/MERFISH_mouse_brain_Splane.ipynb)
+    * [Splane&Scube tutorial (1/2): Alignment of consecutive ST slices on human brain MERFISH dataset](docs/tutorials/MERFISH_mouse_brain_Scube.ipynb)
+    * [Scube tutorial: Alignment of consecutive ST slices on mouse embryo Stereo-seq dataset](docs/tutorials/Stereo-seq_Scube.ipynb)
+    * [Scube tutorial: 3D expression modeling with gaussian process regression](docs/tutorials/STARmap_mouse_brain_GPR.ipynb)
+    * [SPACEL workflow (1/3): Deconvolution by Spoint on mouse brain ST dataset](docs/tutorials/ST_mouse_brain_Spoint.ipynb)
+    * [SPACEL workflow (2/3): Identification of spatial domain by Splane on mouse brain ST dataset](docs/tutorials/ST_mouse_brain_Splane.ipynb)
+    * [SPACEL workflow (3/3): Alignment 3D tissue by Scube on mouse brain ST dataset](docs/tutorials/ST_mouse_brain_Scube.ipynb)
 
 Read the [documentation](https://spacel.readthedocs.io) for more information.
 
