@@ -27,6 +27,12 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 * {doc}`API <api>`
 
 ## Latest updates
+### Version 1.1.5 2023-07-26
+#### Fixed Bugs
+- Fixed a bug in the similarity loss of Splane, where it minimized the cosine similarity of the latent vectors of spots with their neighbors.
+#### Features
+- Optimized the time and memory consumption of the Splane training process for large datasets.
+
 ### Version 1.1.2 2023-07-12
 #### Fixed Bugs
 - Removed `rpy2` from the pypi dependency of SPACEL. It now needs to be pre-installed when creating the environment through conda.

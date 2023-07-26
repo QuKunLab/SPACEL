@@ -26,6 +26,12 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 Read the [documentation](https://spacel.readthedocs.io) for more information.
 
 ## Latest updates
+### Version 1.1.5 2023-07-26
+#### Fixed Bugs
+- Fixed a bug in the similarity loss of Splane, where it minimized the cosine similarity of the latent vectors of spots with their neighbors.
+#### Features
+- Optimized the time and memory consumption of the Splane training process for large datasets.
+
 ### Version 1.1.2 2023-07-12
 #### Fixed Bugs
 - Removed `rpy2` from the pypi dependency of SPACEL. It now needs to be pre-installed when creating the environment through conda.
@@ -52,13 +58,6 @@ or
 conda create -n SPACEL -c conda-forge -c default cudatoolkit=10.2 python=3.8 rpy2 r-base r-fitdistrplus
 ```
 You must choose correct `PyTorch`, `cudnn` and `cudatoolkit` version dependent on your graphic driver version. 
-* Test if [PyTorch](https://pytorch.org) for GPU available:
-```
-python
->>> import torch
->>> torch.cuda.is_available()
-```
-If these command line have not return `True`, please check your gpu driver version and `cudatoolkit` version. For more detail, look at [CUDA Toolkit Major Component Versions](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-major-component-versions).
 
 Note: If you want to run 3D expression GPR model in Scube, you need to install the [Open3D](http://www.open3d.org/docs/release/) python library first.
 
@@ -67,3 +66,10 @@ Note: If you want to run 3D expression GPR model in Scube, you need to install t
 ```
 pip install SPACEL
 ```
+* Test if [PyTorch](https://pytorch.org) for GPU available:
+```
+python
+>>> import torch
+>>> torch.cuda.is_available()
+```
+If these command line have not return `True`, please check your gpu driver version and `cudatoolkit` version. For more detail, look at [CUDA Toolkit Major Component Versions](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#cuda-major-component-versions).

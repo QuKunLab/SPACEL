@@ -195,20 +195,10 @@ class SplaneModel():
         d_loss = F.cross_entropy(self.slice_class_onehot, y_disc)
         decoded_mask = decoded[self.train_idx]
         x_mask = self.graph[0][self.train_idx]
-        f_adj = torch.matmul(encoded, torch.transpose(encoded,0,1))
-        simi_loss = -torch.mean(f_adj[self.nb_mask[0],self.nb_mask[1]]) + torch.mean(torch.abs(encoded[self.nb_mask[0]]-encoded[self.nb_mask[1]]))
-        g_loss = torch.sum(self.celltype_weights*F.cosine_similarity(x_mask, decoded_mask,dim=0))+torch.sum(self.celltype_weights*self.kl_divergence(x_mask, decoded_mask, dim=0)) + simi_l*simi_loss
-        
-        regularization_params = torch.cat([
-            torch.cat([x.view(-1) for x in self.model_g.encode_gc1.parameters()]),
-            torch.cat([x.view(-1) for x in self.model_g.decode_gc1.parameters()])
-        ])
-        l1_regularization = self.l1 * torch.norm(regularization_params, 1)
-        l2_regularization = self.l2 * torch.norm(regularization_params, 2)
+        simi_loss = -torch.mean(torch.sum(encoded[self.nb_mask[0]] * encoded[self.nb_mask[1]], dim=1)) + torch.mean(torch.abs(encoded[self.nb_mask[0]]-encoded[self.nb_mask[1]]))
+        g_loss = -torch.sum(self.celltype_weights*F.cosine_similarity(x_mask, decoded_mask,dim=0))+torch.sum(self.celltype_weights*self.kl_divergence(x_mask, decoded_mask, dim=0)) + simi_l*simi_loss
 
-        l1_l2_loss = l1_regularization + l2_regularization
-        
-        total_loss = g_loss - d_l*d_loss # + l1_l2_loss
+        total_loss = g_loss - d_l*d_loss
         total_loss.backward()
         self.optimizer_g.step()
         return total_loss
@@ -233,9 +223,8 @@ class SplaneModel():
         x_mask = self.graph[0][self.test_idx]
         ll = torch.eq(torch.argmax(self.slice_class_onehot, -1), torch.argmax(y_disc, -1))
         accuarcy = ll.to(torch.float32).mean()
-        f_adj = torch.matmul(encoded, torch.transpose(encoded,0,1))
-        simi_loss = -torch.mean(f_adj[self.nb_mask[0],self.nb_mask[1]]) + torch.mean(torch.abs(encoded[self.nb_mask[0]]-encoded[self.nb_mask[1]]))
-        g_loss = torch.sum(self.celltype_weights*F.cosine_similarity(x_mask, decoded_mask,dim=0))+torch.sum(self.celltype_weights*self.kl_divergence(x_mask, decoded_mask, dim=0)) + simi_l*simi_loss
+        simi_loss = -torch.mean(torch.sum(encoded[self.nb_mask[0]] * encoded[self.nb_mask[1]], dim=1)) + torch.mean(torch.abs(encoded[self.nb_mask[0]]-encoded[self.nb_mask[1]]))
+        g_loss = -torch.sum(self.celltype_weights*F.cosine_similarity(x_mask, decoded_mask,dim=0))+torch.sum(self.celltype_weights*self.kl_divergence(x_mask, decoded_mask, dim=0)) + simi_l*simi_loss
         total_loss = g_loss - d_l*d_loss
         db_loss = clustering(self.Cluster, encoded.cpu().detach().numpy())
         return total_loss, g_loss, d_loss, accuarcy, simi_loss, db_loss, encoded, decoded
