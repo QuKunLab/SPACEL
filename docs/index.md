@@ -27,6 +27,10 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 * {doc}`API <api>`
 
 ## Latest updates
+### Version 1.1.6 2023-07-27
+#### Fixed Bugs
+- Fixed a bug regarding the similarity loss weight hyperparameter `simi_l`, which in the previous version did not affect the loss value.
+
 ### Version 1.1.5 2023-07-26
 #### Fixed Bugs
 - Fixed a bug in the similarity loss of Splane, where it minimized the cosine similarity of the latent vectors of spots with their neighbors.
@@ -39,12 +43,6 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 - Fixed a bug in Scube where the `best_model_state` was not referenced before being used.
 #### Features
 - Added function documentations for Scube related to the GPR model.
-
-### Version 1.1.1 2023-07-11
-#### Features
-* All code based on `Tensorflow` have been mirated to `PyTorch`, it does not have `Tensorflow` as dependency anymore.
-* The `Splane.utils.add_cell_type_composition` function has been implemented to facilitate the cell type composition predicted by deconvolution methods into Splane.
-* Spoint and Splane now support tqdm type output for improved progress tracking.
 
 ```{toctree}
 :hidden: true

@@ -264,7 +264,9 @@ class SplaneModel():
         best_loss = np.inf
         best_db_loss = np.inf
         best_simi_loss = np.inf
-        simi_l = 1/np.mean(self.morans_mean)
+        if simi_l is None:
+            simi_l = 1/np.mean(self.morans_mean)
+            print(f'Setting the weight of similarity loss to {simi_l:.3f}')
         
         if save_path is None:
             save_path = os.path.join(tempfile.gettempdir() ,'Splane_models_'+strftime("%Y%m%d%H%M%S",localtime()))
