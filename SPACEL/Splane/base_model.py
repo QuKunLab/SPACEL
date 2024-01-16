@@ -340,5 +340,5 @@ class SplaneModel():
                 self.expr_ad_list[i].obs = self.expr_ad_list[i].obs.drop(columns=key)
             self.expr_ad_list[i].obs[key] = clusters[loc_index:loc_index+self.expr_ad_list[i].shape[0]]
             self.expr_ad_list[i].obs[key] = pd.Categorical(self.expr_ad_list[i].obs[key])
-            self.expr_ad_list[i].uns[f'{key}_colors'] = [color_map.loc[c,'color'] for c in self.expr_ad_list[i].obs['spatial_domain'].cat.categories]
+            self.expr_ad_list[i].uns[f'{key}_colors'] = [color_map.loc[c,'color'] for c in self.expr_ad_list[i].obs[key].cat.categories]
             loc_index += self.expr_ad_list[i].shape[0]

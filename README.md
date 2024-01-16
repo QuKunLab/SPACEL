@@ -26,6 +26,10 @@ SPACEL (**SP**atial **A**rchitecture **C**haracterization by d**E**ep **L**earni
 Read the [documentation](https://spacel.readthedocs.io) for more information.
 
 ## Latest updates
+### Version 1.1.7 2024-01-16
+#### Fixed Bugs
+- Fixed a variable reference error in function `identify_spatial_domain`. Thanks to @tobias-zehnde for the contribution.
+
 ### Version 1.1.6 2023-07-27
 #### Fixed Bugs
 - Fixed a bug regarding the similarity loss weight hyperparameter `simi_l`, which in the previous version did not affect the loss value.
@@ -35,13 +39,6 @@ Read the [documentation](https://spacel.readthedocs.io) for more information.
 - Fixed a bug in the similarity loss of Splane, where it minimized the cosine similarity of the latent vectors of spots with their neighbors.
 #### Features
 - Optimized the time and memory consumption of the Splane training process for large datasets.
-
-### Version 1.1.2 2023-07-12
-#### Fixed Bugs
-- Removed `rpy2` from the pypi dependency of SPACEL. It now needs to be pre-installed when creating the environment through conda.
-- Fixed a bug in Scube where the `best_model_state` was not referenced before being used.
-#### Features
-- Added function documentations for Scube related to the GPR model.
     
 ## Requirements
 **Note**: The current version of SPACEL only supports Linux and MacOS, not Windows platform. 
