@@ -27,5 +27,6 @@ setup(
         "numba",
         "torch<=1.13",
         "gpytorch",
+        "optax<=0.1.7",
     ],
 )
